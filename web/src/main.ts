@@ -10,10 +10,14 @@ import {
 } from './webmcp/tools';
 import { unityBridge } from './bridge/unity-bridge';
 import { ActivityTimeline } from './ui/activity-timeline';
+import { AgentRelayClient } from './bridge/agent-client';
 
 const timeline = new ActivityTimeline('activity-list');
+(window as any).unityBridge = unityBridge;
 
 async function init() {
+  const relayClient = new AgentRelayClient(timeline);
+  relayClient.start();
   const badge = document.getElementById('webmcp-badge');
   const badgeText = document.getElementById('webmcp-status-text');
   const toolsTags = document.getElementById('active-tools-tags');

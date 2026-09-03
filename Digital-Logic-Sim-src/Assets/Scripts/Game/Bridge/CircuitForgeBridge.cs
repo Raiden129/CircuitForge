@@ -147,14 +147,32 @@ namespace DLS.Bridge
 			var subchipsList = new List<object>();
 			foreach (var sub in devChip.GetSubchips())
 			{
+				var subInputs = sub.InputPins != null ? sub.InputPins.Select(p => new
+				{
+					name = p.Name,
+					id = p.Address.PinID,
+					bit_count = (int)p.bitCount,
+					state = PinState.GetBitStates(p.State)
+				}).ToArray() : Array.Empty<object>();
+
+				var subOutputs = sub.OutputPins != null ? sub.OutputPins.Select(p => new
+				{
+					name = p.Name,
+					id = p.Address.PinID,
+					bit_count = (int)p.bitCount,
+					state = PinState.GetBitStates(p.State)
+				}).ToArray() : Array.Empty<object>();
+
 				subchipsList.Add(new
 				{
 					id = sub.ID,
 					name = sub.Description.Name,
 					label = sub.Label,
 					position = new { x = sub.Position.x, y = sub.Position.y },
-					input_pin_count = sub.InputPins != null ? sub.InputPins.Length : 0,
-					output_pin_count = sub.OutputPins != null ? sub.OutputPins.Length : 0
+					input_pin_count = subInputs.Length,
+					output_pin_count = subOutputs.Length,
+					input_pins = subInputs,
+					output_pins = subOutputs
 				});
 			}
 
@@ -187,13 +205,15 @@ namespace DLS.Bridge
 			var wiresList = new List<object>();
 			foreach (var w in devChip.Wires)
 			{
+				ushort wireSignal = w.SourcePin != null ? PinState.GetBitStates(w.SourcePin.State) : (ushort)0;
 				wiresList.Add(new
 				{
 					wire_id = w.spawnOrder,
 					source = w.SourcePin != null ? $"{w.SourcePin.Address.PinOwnerID}:{w.SourcePin.Address.PinID}" : "",
 					source_name = w.SourcePin != null ? w.SourcePin.Name : "",
 					target = w.TargetPin != null ? $"{w.TargetPin.Address.PinOwnerID}:{w.TargetPin.Address.PinID}" : "",
-					target_name = w.TargetPin != null ? w.TargetPin.Name : ""
+					target_name = w.TargetPin != null ? w.TargetPin.Name : "",
+					signal = wireSignal
 				});
 			}
 

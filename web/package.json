@@ -9,9 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "ws": "^8.21.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/ws": "^8.18.1",
     "typescript": "^5.7.3",
     "vite": "^6.2.0"
   }
