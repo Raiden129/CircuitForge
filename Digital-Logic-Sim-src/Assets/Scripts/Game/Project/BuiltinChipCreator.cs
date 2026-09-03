@@ -24,6 +24,10 @@ namespace DLS.Game
 				CreateInputKeyChip(),
 				// ---- Basic Chips ----
 				CreateNand(),
+				CreateAnd(),
+				CreateOr(),
+				CreateNot(),
+				CreateXor(),
 				CreateTristateBuffer(),
 				CreateClock(),
 				CreatePulse(),
@@ -64,6 +68,42 @@ namespace DLS.Game
 			PinDescription[] outputPins = { CreatePinDescription("OUT", 2) };
 
 			return CreateBuiltinChipDescription(ChipType.Nand, size, col, inputPins, outputPins);
+		}
+
+		static ChipDescription CreateAnd()
+		{
+			Color col = new(0.25f, 0.45f, 0.85f);
+			Vector2 size = new(CalculateGridSnappedWidth(GridSize * 8), GridSize * 4);
+			PinDescription[] inputPins = { CreatePinDescription("IN B", 0), CreatePinDescription("IN A", 1) };
+			PinDescription[] outputPins = { CreatePinDescription("OUT", 2) };
+			return CreateBuiltinChipDescription(ChipType.And, size, col, inputPins, outputPins);
+		}
+
+		static ChipDescription CreateOr()
+		{
+			Color col = new(0.2f, 0.65f, 0.35f);
+			Vector2 size = new(CalculateGridSnappedWidth(GridSize * 8), GridSize * 4);
+			PinDescription[] inputPins = { CreatePinDescription("IN B", 0), CreatePinDescription("IN A", 1) };
+			PinDescription[] outputPins = { CreatePinDescription("OUT", 2) };
+			return CreateBuiltinChipDescription(ChipType.Or, size, col, inputPins, outputPins);
+		}
+
+		static ChipDescription CreateNot()
+		{
+			Color col = new(0.85f, 0.45f, 0.15f);
+			Vector2 size = new(CalculateGridSnappedWidth(GridSize * 6), GridSize * 3);
+			PinDescription[] inputPins = { CreatePinDescription("IN", 0) };
+			PinDescription[] outputPins = { CreatePinDescription("OUT", 1) };
+			return CreateBuiltinChipDescription(ChipType.Not, size, col, inputPins, outputPins);
+		}
+
+		static ChipDescription CreateXor()
+		{
+			Color col = new(0.65f, 0.3f, 0.75f);
+			Vector2 size = new(CalculateGridSnappedWidth(GridSize * 8), GridSize * 4);
+			PinDescription[] inputPins = { CreatePinDescription("IN B", 0), CreatePinDescription("IN A", 1) };
+			PinDescription[] outputPins = { CreatePinDescription("OUT", 2) };
+			return CreateBuiltinChipDescription(ChipType.Xor, size, col, inputPins, outputPins);
 		}
 
 		static ChipDescription CreateBuzzer()

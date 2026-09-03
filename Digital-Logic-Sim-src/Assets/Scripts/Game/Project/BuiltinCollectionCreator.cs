@@ -10,7 +10,11 @@ namespace DLS.Game
 			return new StarredItem[]
 			{
 				new("IN/OUT", true),
-				new(ChipTypeHelper.GetName(ChipType.Nand), false)
+				new(ChipTypeHelper.GetName(ChipType.Nand), false),
+				new(ChipTypeHelper.GetName(ChipType.And), false),
+				new(ChipTypeHelper.GetName(ChipType.Or), false),
+				new(ChipTypeHelper.GetName(ChipType.Not), false),
+				new(ChipTypeHelper.GetName(ChipType.Xor), false)
 			};
 		}
 
@@ -20,6 +24,10 @@ namespace DLS.Game
 			{
 				CreateChipCollection("BASIC",
 					ChipType.Nand,
+					ChipType.And,
+					ChipType.Or,
+					ChipType.Not,
+					ChipType.Xor,
 					ChipType.Clock,
 					ChipType.Pulse,
 					ChipType.Key,

@@ -234,6 +234,26 @@ namespace DLS.Simulation
 					chip.OutputPins[0].State = (ushort)(nandOp & 1);
 					break;
 				}
+				case ChipType.And:
+				{
+					chip.OutputPins[0].State = (ushort)((chip.InputPins[0].State & chip.InputPins[1].State) & 1);
+					break;
+				}
+				case ChipType.Or:
+				{
+					chip.OutputPins[0].State = (ushort)((chip.InputPins[0].State | chip.InputPins[1].State) & 1);
+					break;
+				}
+				case ChipType.Not:
+				{
+					chip.OutputPins[0].State = (ushort)(1 ^ (chip.InputPins[0].State & 1));
+					break;
+				}
+				case ChipType.Xor:
+				{
+					chip.OutputPins[0].State = (ushort)((chip.InputPins[0].State ^ chip.InputPins[1].State) & 1);
+					break;
+				}
 				case ChipType.Clock:
 				{
 					bool high = stepsPerClockTransition != 0 && ((simulationFrame / stepsPerClockTransition) & 1) == 0;

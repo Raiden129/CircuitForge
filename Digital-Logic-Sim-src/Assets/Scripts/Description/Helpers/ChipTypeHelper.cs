@@ -11,6 +11,10 @@ namespace DLS.Description
 		{
 			// ---- Basic Chips ----
 			{ ChipType.Nand, "NAND" },
+			{ ChipType.And, "AND" },
+			{ ChipType.Or, "OR" },
+			{ ChipType.Not, "NOT" },
+			{ ChipType.Xor, "XOR" },
 			{ ChipType.Clock, "CLOCK" },
 			{ ChipType.Pulse, "PULSE" },
 			{ ChipType.TriStateBuffer, "3-STATE BUFFER" },
