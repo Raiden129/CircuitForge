@@ -7,6 +7,7 @@ using DLS.Game;
 using DLS.Description;
 using DLS.Simulation;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace DLS.Bridge
 {
@@ -26,7 +27,7 @@ namespace DLS.Bridge
 			GameObject go = new("CircuitForgeBridge");
 			instance = go.AddComponent<CircuitForgeBridge>();
 			DontDestroyOnLoad(go);
-			Debug.Log("[CircuitForgeBridge] Bridge initialized and listening for WebMCP messages");
+			Debug.Log("[CircuitForgeBridge] Bridge initialized and ready for WebMCP");
 		}
 
 		public void Receive(string requestJson)
@@ -79,6 +80,7 @@ namespace DLS.Bridge
 						SendResponse(requestId, true, "pong", new Dictionary<string, object>
 						{
 							{ "status", "alive" },
+							{ "revision", circuitRevision },
 							{ "time", Time.time }
 						});
 						break;
@@ -86,15 +88,34 @@ namespace DLS.Bridge
 					case "get_capabilities":
 						SendResponse(requestId, true, "Active WebMCP capabilities retrieved", new Dictionary<string, object>
 						{
-							{ "bundles", new[] { "inspect", "edit", "simulate" } },
+							{ "bundles", new[] { "inspect", "edit", "simulate", "learn" } },
 							{ "active_chip", Project.ActiveProject != null ? Project.ActiveProject.ActiveDevChipName : "" },
 							{ "can_edit", Project.ActiveProject != null && Project.ActiveProject.CanEditViewedChip },
-							{ "paused", Project.ActiveProject != null && Project.ActiveProject.SimPaused }
+							{ "paused", Project.ActiveProject != null && Project.ActiveProject.SimPaused },
+							{ "revision", circuitRevision }
 						});
 						break;
 
 					case "get_snapshot":
 						HandleGetSnapshot(requestId, req);
+						break;
+
+					case "set_input":
+						HandleSetInput(requestId, req);
+						break;
+
+					case "pause":
+						if (Project.ActiveProject != null) Project.ActiveProject.simPaused = true;
+						SendResponse(requestId, true, "Simulation paused", new Dictionary<string, object> { { "paused", true } });
+						break;
+
+					case "run":
+						if (Project.ActiveProject != null) Project.ActiveProject.simPaused = false;
+						SendResponse(requestId, true, "Simulation running", new Dictionary<string, object> { { "paused", false } });
+						break;
+
+					case "step":
+						HandleStep(requestId, req);
 						break;
 
 					default:
@@ -143,7 +164,7 @@ namespace DLS.Bridge
 					name = p.PinName,
 					bit_count = p.BitCount,
 					position = new { x = p.Position.x, y = p.Position.y },
-					state = p.State.ToString()
+					state = PinState.GetBitStates(p.State)
 				});
 			}
 
@@ -156,7 +177,7 @@ namespace DLS.Bridge
 					name = p.PinName,
 					bit_count = p.BitCount,
 					position = new { x = p.Position.x, y = p.Position.y },
-					state = p.State.ToString()
+					state = PinState.GetBitStates(p.State)
 				});
 			}
 
@@ -173,7 +194,7 @@ namespace DLS.Bridge
 
 			var data = new Dictionary<string, object>
 			{
-				{ "project_name", Project.ActiveProject.description.ProjectName },
+				{ "project_name", Project.ActiveProject.description != null ? Project.ActiveProject.description.ProjectName : "Sandbox" },
 				{ "active_chip", chipName },
 				{ "revision", circuitRevision },
 				{ "subchip_count", subchipsList.Count },
@@ -185,6 +206,86 @@ namespace DLS.Bridge
 			};
 
 			SendResponse(requestId, true, $"Snapshot of '{chipName}': {subchipsList.Count} components, {wiresList.Count} wires, {inputPinsList.Count} inputs, {outputPinsList.Count} outputs", data, new[] { "circuit_add_component", "circuit_connect", "circuit_set_input" });
+		}
+
+		private void HandleSetInput(string requestId, BridgeRequestModel req)
+		{
+			if (Project.ActiveProject == null || Project.ActiveProject.ViewedChip == null)
+			{
+				SendError(requestId, "NO_ACTIVE_PROJECT", "No active circuit project loaded");
+				return;
+			}
+
+			var payload = req.payload;
+			if (payload == null)
+			{
+				SendError(requestId, "MISSING_PAYLOAD", "Missing payload for set_input");
+				return;
+			}
+
+			string pinIdOrName = payload.ContainsKey("pin_id") ? payload["pin_id"]?.ToString() : (payload.ContainsKey("name") ? payload["name"]?.ToString() : null);
+			if (string.IsNullOrEmpty(pinIdOrName))
+			{
+				SendError(requestId, "INVALID_PIN_SPECIFIER", "Must specify pin_id or name");
+				return;
+			}
+
+			DevChipInstance devChip = Project.ActiveProject.ViewedChip;
+			DevPinInstance targetPin = devChip.GetInputPins().FirstOrDefault(p => p.ID.ToString() == pinIdOrName || p.PinName.Equals(pinIdOrName, StringComparison.OrdinalIgnoreCase));
+
+			if (targetPin == null)
+			{
+				SendError(requestId, "PIN_NOT_FOUND", $"Input pin '{pinIdOrName}' not found on active chip");
+				return;
+			}
+
+			if (payload.ContainsKey("value"))
+			{
+				int val = Convert.ToInt32(payload["value"]);
+				PinState.Set(ref targetPin.Pin.PlayerInputState, (ushort)val, 0);
+			}
+			else
+			{
+				targetPin.ToggleState(0);
+			}
+
+			circuitRevision++;
+			ushort currentVal = PinState.GetBitStates(targetPin.Pin.PlayerInputState);
+
+			SendResponse(requestId, true, $"Set input '{targetPin.PinName}' to {currentVal}", new Dictionary<string, object>
+			{
+				{ "pin_id", targetPin.ID },
+				{ "name", targetPin.PinName },
+				{ "value", currentVal },
+				{ "revision", circuitRevision }
+			}, new[] { "circuit_step", "circuit_get_snapshot" });
+		}
+
+		private void HandleStep(string requestId, BridgeRequestModel req)
+		{
+			if (Project.ActiveProject == null)
+			{
+				SendError(requestId, "NO_ACTIVE_PROJECT", "No active circuit project loaded");
+				return;
+			}
+
+			int steps = 1;
+			if (req.payload != null && req.payload.ContainsKey("steps"))
+			{
+				steps = Math.Max(1, Math.Min(100, Convert.ToInt32(req.payload["steps"])));
+			}
+
+			for (int i = 0; i < steps; i++)
+			{
+				Project.ActiveProject.advanceSingleSimStep = true;
+			}
+
+			circuitRevision++;
+			SendResponse(requestId, true, $"Stepped simulation by {steps} tick(s)", new Dictionary<string, object>
+			{
+				{ "steps", steps },
+				{ "revision", circuitRevision }
+			});
 		}
 
 		private void SendResponse(string requestId, bool ok, string summary, Dictionary<string, object> data, string[] nextActions = null)
@@ -234,7 +335,7 @@ namespace DLS.Bridge
 				Debug.LogError($"[CircuitForgeBridge] JSLIB call failed: {ex}");
 			}
 #else
-			Debug.Log($"[CircuitForgeBridge] (Non-WebGL / Editor Dispatch) ID={requestId} JSON={json}");
+			Debug.Log($"[CircuitForgeBridge] Dispatch: ID={requestId} JSON={json}");
 #endif
 		}
 	}

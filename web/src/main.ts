@@ -1,5 +1,12 @@
 import { toolRegistry } from './webmcp/registry';
-import { circuitGetSnapshotTool, circuitGetCapabilitiesTool } from './webmcp/tools';
+import {
+  circuitGetSnapshotTool,
+  circuitGetCapabilitiesTool,
+  circuitSetInputTool,
+  circuitStepTool,
+  circuitPauseTool,
+  circuitRunTool,
+} from './webmcp/tools';
 import { unityBridge } from './bridge/unity-bridge';
 import { ActivityTimeline } from './ui/activity-timeline';
 
@@ -21,9 +28,13 @@ async function init() {
     badge?.classList.add('active');
     if (badgeText) badgeText.textContent = 'WebMCP Active';
 
-    // Register initial tools
+    // Register inspection & simulation tools
     await toolRegistry.register(circuitGetCapabilitiesTool);
     await toolRegistry.register(circuitGetSnapshotTool);
+    await toolRegistry.register(circuitSetInputTool);
+    await toolRegistry.register(circuitStepTool);
+    await toolRegistry.register(circuitPauseTool);
+    await toolRegistry.register(circuitRunTool);
 
     timeline.log({
       actor: 'human',
