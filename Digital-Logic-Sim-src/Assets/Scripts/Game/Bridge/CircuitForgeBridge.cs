@@ -59,7 +59,7 @@ namespace DLS.Bridge
 
 		private static bool IsMutatingCommand(string cmd)
 		{
-			return cmd is "add_component" or "connect" or "disconnect" or "set_input" or "undo" or "redo";
+			return cmd is "add_component" or "connect" or "disconnect" or "set_input" or "undo" or "redo" or "delete_component" or "clear_workspace";
 		}
 
 		private void ProcessRequest(string requestJson)
@@ -166,6 +166,14 @@ namespace DLS.Bridge
 
 					case "redo":
 						DispatchCommandResult(requestId, commandService.Redo());
+						break;
+
+					case "delete_component":
+						HandleDeleteComponent(requestId, req);
+						break;
+
+					case "clear_workspace":
+						DispatchCommandResult(requestId, commandService.ClearWorkspace());
 						break;
 
 					default:
@@ -481,6 +489,19 @@ namespace DLS.Bridge
 			}
 
 			var res = commandService.AnalyzeCircuit(scope);
+			DispatchCommandResult(requestId, res);
+		}
+
+		private void HandleDeleteComponent(string requestId, BridgeRequestModel req)
+		{
+			object comp = null;
+			if (req.payload != null)
+			{
+				if (req.payload.ContainsKey("component_id")) comp = req.payload["component_id"];
+				else if (req.payload.ContainsKey("name")) comp = req.payload["name"];
+			}
+
+			var res = commandService.DeleteComponent(comp);
 			DispatchCommandResult(requestId, res);
 		}
 

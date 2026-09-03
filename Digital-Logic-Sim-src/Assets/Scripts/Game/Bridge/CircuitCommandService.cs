@@ -176,6 +176,85 @@ namespace DLS.Bridge
 			}, new[] { "circuit_connect", "circuit_get_snapshot", "circuit_step" });
 		}
 
+		public CommandResult DeleteComponent(object compRef)
+		{
+			if (Project.ActiveProject == null || Project.ActiveProject.ViewedChip == null)
+			{
+				return CommandResult.Fail("NO_ACTIVE_PROJECT", "No active circuit project loaded", Revision);
+			}
+
+			DevChipInstance devChip = Project.ActiveProject.ViewedChip;
+			string refStr = compRef?.ToString();
+
+			IMoveable target = devChip.Elements.FirstOrDefault(e =>
+			{
+				if (e is SubChipInstance s)
+					return s.ID.ToString() == refStr || s.Description.Name.Equals(refStr, StringComparison.OrdinalIgnoreCase) || s.Label.Equals(refStr, StringComparison.OrdinalIgnoreCase);
+				if (e is DevPinInstance p)
+					return p.ID.ToString() == refStr || p.Name.Equals(refStr, StringComparison.OrdinalIgnoreCase);
+				return false;
+			});
+
+			if (target == null)
+			{
+				return CommandResult.Fail("COMPONENT_NOT_FOUND", $"Component '{refStr}' not found on active canvas.", Revision);
+			}
+
+			int id = target.ID;
+			string name = target is SubChipInstance sChip ? sChip.Description.Name : ((DevPinInstance)target).Name;
+
+			devChip.UndoController.RecordDeleteElements(new List<IMoveable> { target });
+
+			if (target is SubChipInstance sub) devChip.DeleteSubChip(sub);
+			else if (target is DevPinInstance pin) devChip.DeleteDevPin(pin);
+
+			devChip.RebuildSimulation();
+			BumpRevision();
+
+			return CommandResult.Success(Revision, $"Deleted {name} (ID: {id})", new Dictionary<string, object>
+			{
+				{ "component_id", id },
+				{ "name", name },
+				{ "revision", Revision }
+			}, new[] { "circuit_get_snapshot", "circuit_add_component" });
+		}
+
+		public CommandResult ClearWorkspace()
+		{
+			if (Project.ActiveProject == null || Project.ActiveProject.ViewedChip == null)
+			{
+				return CommandResult.Fail("NO_ACTIVE_PROJECT", "No active circuit project loaded", Revision);
+			}
+
+			DevChipInstance devChip = Project.ActiveProject.ViewedChip;
+			var elementsToDelete = devChip.Elements.ToList();
+			if (elementsToDelete.Count > 0)
+			{
+				devChip.UndoController.RecordDeleteElements(elementsToDelete);
+				foreach (var elem in elementsToDelete)
+				{
+					if (elem is SubChipInstance sub) devChip.DeleteSubChip(sub);
+					else if (elem is DevPinInstance pin) devChip.DeleteDevPin(pin);
+				}
+			}
+
+			var wiresToDelete = devChip.Wires.ToList();
+			foreach (var w in wiresToDelete)
+			{
+				devChip.DeleteWire(w);
+			}
+
+			devChip.RebuildSimulation();
+			BumpRevision();
+
+			return CommandResult.Success(Revision, "Workspace cleared", new Dictionary<string, object>
+			{
+				{ "revision", Revision },
+				{ "remaining_components", 0 },
+				{ "remaining_wires", 0 }
+			});
+		}
+
 		public CommandResult ConnectPins(object sourcePinRef, object targetPinRef)
 		{
 			if (Project.ActiveProject == null || Project.ActiveProject.ViewedChip == null)

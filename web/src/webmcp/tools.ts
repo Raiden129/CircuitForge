@@ -279,3 +279,41 @@ export const circuitRedoTool: WebMCPToolDefinition = {
     return unityBridge.send('redo', input, signal);
   },
 };
+
+export const circuitDeleteComponentTool: WebMCPToolDefinition = {
+  name: 'circuit_delete_component',
+  description: 'Delete a specific placed gate, IC, or IO pin from the active canvas.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      component_id: {
+        description: 'ID or label/name of the component to delete.',
+      },
+      expected_revision: {
+        type: 'number',
+        description: 'Expected circuit revision before deletion.',
+      },
+    },
+    required: ['component_id'],
+  },
+  execute: async (input: { component_id: any; expected_revision?: number }, { signal }) => {
+    return unityBridge.send('delete_component', input, signal);
+  },
+};
+
+export const circuitClearWorkspaceTool: WebMCPToolDefinition = {
+  name: 'circuit_clear_workspace',
+  description: 'Clear all components and wires from the active canvas.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      expected_revision: {
+        type: 'number',
+        description: 'Expected circuit revision before clearing.',
+      },
+    },
+  },
+  execute: async (input: { expected_revision?: number } = {}, { signal }) => {
+    return unityBridge.send('clear_workspace', input, signal);
+  },
+};
