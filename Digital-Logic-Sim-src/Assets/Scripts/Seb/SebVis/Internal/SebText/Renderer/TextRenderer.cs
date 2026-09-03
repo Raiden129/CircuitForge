@@ -70,8 +70,156 @@ namespace Seb.Vis.Text.Rendering
 			textGroups.Add(groupData);
 		}
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+		static readonly int id_perInstanceTex = Shader.PropertyToID("_PerInstanceDataTex");
+		static readonly int id_perInstanceTexWidth = Shader.PropertyToID("_PerInstanceTexWidth");
+		static readonly int id_textGroupsTex = Shader.PropertyToID("_TextGroupsTex");
+		static readonly int id_textGroupsTexWidth = Shader.PropertyToID("_TextGroupsTexWidth");
+		static readonly int id_bezierTex = Shader.PropertyToID("_BezierDataTex");
+		static readonly int id_bezierTexWidth = Shader.PropertyToID("_BezierTexWidth");
+		static readonly int id_glyphMetaTex = Shader.PropertyToID("_GlyphMetaDataTex");
+		static readonly int id_glyphMetaTexWidth = Shader.PropertyToID("_GlyphMetaTexWidth");
+
+		Texture2D instanceTex;
+		Texture2D groupTex;
+		static Texture2D sharedBezierTex;
+		static Texture2D sharedMetaTex;
+		static int lastSharedBezierCount = -1;
+		static int lastSharedMetaCount = -1;
+
+		Vector4[] instancePixelBuf = Array.Empty<Vector4>();
+		Vector4[] groupPixelBuf = Array.Empty<Vector4>();
+#endif
+
 		public void Render(CommandBuffer cmd)
 		{
+#if UNITY_WEBGL && !UNITY_EDITOR
+			// Upload shared bezier points if changed
+			int bCount = textRenderData.bezierPoints.Count;
+			if (sharedBezierTex == null || bCount != lastSharedBezierCount)
+			{
+				int totalTexels = Mathf.Max(1, Mathf.CeilToInt((float)bCount / 2));
+				int bHeight = Mathf.Max(1, Mathf.CeilToInt((float)totalTexels / 1024));
+				Vector4[] bPixels = new Vector4[1024 * bHeight];
+				for (int i = 0; i < bCount; i += 2)
+				{
+					Vector2 p0 = textRenderData.bezierPoints[i];
+					Vector2 p1 = (i + 1 < bCount) ? textRenderData.bezierPoints[i + 1] : Vector2.zero;
+					bPixels[i / 2] = new Vector4(p0.x, p0.y, p1.x, p1.y);
+				}
+				if (sharedBezierTex != null) Object.Destroy(sharedBezierTex);
+				sharedBezierTex = new Texture2D(1024, bHeight, TextureFormat.RGBAFloat, false, true);
+				sharedBezierTex.filterMode = FilterMode.Point;
+				sharedBezierTex.wrapMode = TextureWrapMode.Clamp;
+				sharedBezierTex.SetPixelData(bPixels, 0);
+				sharedBezierTex.Apply(false, false);
+				lastSharedBezierCount = bCount;
+			}
+
+			// Upload shared glyph metadata if changed
+			int mCount = textRenderData.glyphMetadata.Count;
+			if (sharedMetaTex == null || mCount != lastSharedMetaCount)
+			{
+				int totalTexels = Mathf.Max(1, Mathf.CeilToInt((float)mCount / 4));
+				int mHeight = Mathf.Max(1, Mathf.CeilToInt((float)totalTexels / 1024));
+				Vector4[] mPixels = new Vector4[1024 * mHeight];
+				for (int i = 0; i < mCount; i += 4)
+				{
+					float m0 = textRenderData.glyphMetadata[i];
+					float m1 = (i + 1 < mCount) ? textRenderData.glyphMetadata[i + 1] : 0;
+					float m2 = (i + 2 < mCount) ? textRenderData.glyphMetadata[i + 2] : 0;
+					float m3 = (i + 3 < mCount) ? textRenderData.glyphMetadata[i + 3] : 0;
+					mPixels[i / 4] = new Vector4(m0, m1, m2, m3);
+				}
+				if (sharedMetaTex != null) Object.Destroy(sharedMetaTex);
+				sharedMetaTex = new Texture2D(1024, mHeight, TextureFormat.RGBAFloat, false, true);
+				sharedMetaTex.filterMode = FilterMode.Point;
+				sharedMetaTex.wrapMode = TextureWrapMode.Clamp;
+				sharedMetaTex.SetPixelData(mPixels, 0);
+				sharedMetaTex.Apply(false, false);
+				lastSharedMetaCount = mCount;
+			}
+
+			// Upload per-glyph instances
+			int instCount = perGlyphInstanceData.Count;
+			if (instCount > 0)
+			{
+				int instTexels = instCount * 3;
+				int iHeight = Mathf.Max(1, Mathf.CeilToInt((float)instTexels / 1024));
+				int needed = 1024 * iHeight;
+				if (instancePixelBuf.Length < needed) instancePixelBuf = new Vector4[needed];
+				if (instanceTex == null || instanceTex.height < iHeight)
+				{
+					if (instanceTex != null) Object.Destroy(instanceTex);
+					instanceTex = new Texture2D(1024, iHeight, TextureFormat.RGBAFloat, false, true);
+					instanceTex.filterMode = FilterMode.Point;
+					instanceTex.wrapMode = TextureWrapMode.Clamp;
+				}
+				for (int i = 0; i < instCount; i++)
+				{
+					var inst = perGlyphInstanceData[i];
+					int baseIdx = i * 3;
+					instancePixelBuf[baseIdx] = new Vector4(inst.pos.x, inst.pos.y, inst.sizeEm.x, inst.sizeEm.y);
+					instancePixelBuf[baseIdx + 1] = new Vector4(inst.col.r, inst.col.g, inst.col.b, inst.col.a);
+					instancePixelBuf[baseIdx + 2] = new Vector4(inst.fontSize, inst.dataOffset, inst.groupIndex, 0);
+				}
+				instanceTex.SetPixelData(instancePixelBuf, 0);
+				instanceTex.Apply(false, false);
+			}
+
+			// Upload text groups
+			int grpCount = textGroups.Count;
+			if (grpCount > 0)
+			{
+				int grpTexels = grpCount * 2;
+				int gHeight = Mathf.Max(1, Mathf.CeilToInt((float)grpTexels / 1024));
+				int needed = 1024 * gHeight;
+				if (groupPixelBuf.Length < needed) groupPixelBuf = new Vector4[needed];
+				if (groupTex == null || groupTex.height < gHeight)
+				{
+					if (groupTex != null) Object.Destroy(groupTex);
+					groupTex = new Texture2D(1024, gHeight, TextureFormat.RGBAFloat, false, true);
+					groupTex.filterMode = FilterMode.Point;
+					groupTex.wrapMode = TextureWrapMode.Clamp;
+				}
+				for (int i = 0; i < grpCount; i++)
+				{
+					var grp = textGroups[i];
+					int baseIdx = i * 2;
+					groupPixelBuf[baseIdx] = new Vector4(grp.Offset.x, grp.Offset.y, grp.UseScreenSpace, 0);
+					groupPixelBuf[baseIdx + 1] = new Vector4(grp.MaskMin.x, grp.MaskMin.y, grp.MaskMax.x, grp.MaskMax.y);
+				}
+				groupTex.SetPixelData(groupPixelBuf, 0);
+				groupTex.Apply(false, false);
+			}
+
+			// Assign textures to material
+			if (sharedBezierTex != null)
+			{
+				fontMat.SetTexture(id_bezierTex, sharedBezierTex);
+				fontMat.SetInt(id_bezierTexWidth, 1024);
+			}
+			if (sharedMetaTex != null)
+			{
+				fontMat.SetTexture(id_glyphMetaTex, sharedMetaTex);
+				fontMat.SetInt(id_glyphMetaTexWidth, 1024);
+			}
+			if (instanceTex != null)
+			{
+				fontMat.SetTexture(id_perInstanceTex, instanceTex);
+				fontMat.SetInt(id_perInstanceTexWidth, 1024);
+			}
+			if (groupTex != null)
+			{
+				fontMat.SetTexture(id_textGroupsTex, groupTex);
+				fontMat.SetInt(id_textGroupsTexWidth, 1024);
+			}
+
+			if (perGlyphInstanceData.Count > 0)
+			{
+				cmd.DrawMeshInstancedProcedural(quadMesh, 0, fontMat, 0, perGlyphInstanceData.Count);
+			}
+#else
 			// Create buffers
 			ComputeHelper.CreateArgsBuffer(ref argsBuffer, quadMesh, perGlyphInstanceData.Count);
 			ComputeHelper.CreateStructuredBuffer_DontShrink(ref instanceDataBuffer, perGlyphInstanceData);
@@ -87,12 +235,6 @@ namespace Seb.Vis.Text.Rendering
 
 			// Render
 			// Note: world bounds are: (globalOffset + boundsCentre, boundsSize)
-#if UNITY_WEBGL && !UNITY_EDITOR
-			if (perGlyphInstanceData.Count > 0)
-			{
-				cmd.DrawMeshInstancedProcedural(quadMesh, 0, fontMat, 0, perGlyphInstanceData.Count);
-			}
-#else
 			cmd.DrawMeshInstancedIndirect(quadMesh, 0, fontMat, 0, argsBuffer, 0);
 #endif
 		}
@@ -218,7 +360,12 @@ namespace Seb.Vis.Text.Rendering
 
 		public void Release()
 		{
+#if UNITY_WEBGL && !UNITY_EDITOR
+			if (instanceTex != null) { Object.Destroy(instanceTex); instanceTex = null; }
+			if (groupTex != null) { Object.Destroy(groupTex); groupTex = null; }
+#else
 			ComputeHelper.Release(argsBuffer, instanceDataBuffer, bezierBuffer, metadataBuffer, textGroupBuffer);
+#endif
 
 			if (fontMat != null)
 			{

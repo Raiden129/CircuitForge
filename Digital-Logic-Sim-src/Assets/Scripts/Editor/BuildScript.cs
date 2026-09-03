@@ -9,6 +9,17 @@ namespace CircuitForge.Editor
 {
 	public static class BuildScript
 	{
+		public static void TestAPIs()
+		{
+			PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.WebGL, false);
+			PlayerSettings.SetGraphicsAPIs(BuildTarget.WebGL, new[] {
+				UnityEngine.Rendering.GraphicsDeviceType.WebGPU,
+				UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3
+			});
+			var newApis = PlayerSettings.GetGraphicsAPIs(BuildTarget.WebGL);
+			Debug.Log($"[APIs] New WebGL APIs: {string.Join(", ", newApis)}");
+		}
+
 		public static void BuildWebGL()
 		{
 			string projectRoot = Directory.GetParent(Application.dataPath).FullName;

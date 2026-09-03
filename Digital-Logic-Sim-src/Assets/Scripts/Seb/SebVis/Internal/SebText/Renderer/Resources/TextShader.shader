@@ -34,6 +34,71 @@ Shader "Seb.Vis.Text/TextShader"
                 int useScreenSpace;
             };
 
+#if defined(SHADER_API_GLES3) || defined(SHADER_API_GLES)
+            Texture2D<float4> _PerInstanceDataTex;
+            Texture2D<float4> _BezierDataTex;
+            Texture2D<float4> _GlyphMetaDataTex;
+            Texture2D<float4> _TextGroupsTex;
+
+            int _PerInstanceTexWidth;
+            int _BezierTexWidth;
+            int _GlyphMetaTexWidth;
+            int _TextGroupsTexWidth;
+
+            InstanceData LoadInstanceData(uint id)
+            {
+                InstanceData inst;
+                int baseTexel = int(id) * 3;
+                int w = _PerInstanceTexWidth;
+                float4 p0 = _PerInstanceDataTex.Load(int3(baseTexel % w, baseTexel / w, 0));
+                float4 p1 = _PerInstanceDataTex.Load(int3((baseTexel + 1) % w, (baseTexel + 1) / w, 0));
+                float4 p2 = _PerInstanceDataTex.Load(int3((baseTexel + 2) % w, (baseTexel + 2) / w, 0));
+
+                inst.pos = p0.xy;
+                inst.size = p0.zw;
+                inst.col = p1;
+                inst.fontSize = p2.x;
+                inst.dataOffset = int(p2.y);
+                inst.groupIndex = int(p2.z);
+                return inst;
+            }
+
+            TextGroup LoadTextGroup(int id)
+            {
+                TextGroup grp;
+                int baseTexel = id * 2;
+                int w = _TextGroupsTexWidth;
+                float4 p0 = _TextGroupsTex.Load(int3(baseTexel % w, baseTexel / w, 0));
+                float4 p1 = _TextGroupsTex.Load(int3((baseTexel + 1) % w, (baseTexel + 1) / w, 0));
+
+                grp.offset = p0.xy;
+                grp.useScreenSpace = int(p0.z);
+                grp.maskMin = p1.xy;
+                grp.maskMax = p1.zw;
+                return grp;
+            }
+
+            float2 LoadBezierPoint(int id)
+            {
+                int texel = id / 2;
+                int sub = id % 2;
+                int w = _BezierTexWidth;
+                float4 p = _BezierDataTex.Load(int3(texel % w, texel / w, 0));
+                return (sub == 0) ? p.xy : p.zw;
+            }
+
+            int LoadGlyphMeta(int id)
+            {
+                int texel = id / 4;
+                int sub = id % 4;
+                int w = _GlyphMetaTexWidth;
+                float4 p = _GlyphMetaDataTex.Load(int3(texel % w, texel / w, 0));
+                if (sub == 0) return int(p.x);
+                if (sub == 1) return int(p.y);
+                if (sub == 2) return int(p.z);
+                return int(p.w);
+            }
+#else
             // Data stored for every instance (each individual glyph that needs to be rendered)
             StructuredBuffer<InstanceData> PerInstanceData;
             // Position data for the bezier curves
@@ -42,6 +107,7 @@ Shader "Seb.Vis.Text/TextShader"
             StructuredBuffer<int> GlyphMetaData;
             // Info about each block of text being rendered: masks, position offset, etc
             StructuredBuffer<TextGroup> TextGroups;
+#endif
 
             float4x4 WorldToClipSpace;
             float2 ScreenSize;
@@ -87,8 +153,13 @@ Shader "Seb.Vis.Text/TextShader"
 
             v2f vert(appdata v, uint instanceID : SV_InstanceID)
             {
+#if defined(SHADER_API_GLES3) || defined(SHADER_API_GLES)
+                InstanceData instance = LoadInstanceData(instanceID);
+                TextGroup group = LoadTextGroup(instance.groupIndex);
+#else
                 InstanceData instance = PerInstanceData[instanceID];
                 TextGroup group = TextGroups[instance.groupIndex];
+#endif
 
                 v2f o;
                 float2 aaPad = CalculateWorldUnitsPerPixel() * 2;
@@ -146,6 +217,23 @@ Shader "Seb.Vis.Text/TextShader"
                 float coverage = 0;
                 float invPixelSize = 1 / pixelSize;
 
+#if defined(SHADER_API_GLES3) || defined(SHADER_API_GLES)
+                int pointOffset = LoadGlyphMeta(dataOffset);
+                int numContours = LoadGlyphMeta(dataOffset + 1);
+                dataOffset += 2;
+
+                // Loop over all contours
+                for (int contourIndex = 0; contourIndex < numContours; contourIndex++)
+                {
+                    int numPoints = LoadGlyphMeta(dataOffset + contourIndex);
+
+                    for (int i = 0; i < numPoints; i += 2)
+                    {
+                        // Get positions of curve's control points relative to the current pixel
+                        float2 p0 = LoadBezierPoint(i + 0 + pointOffset) - pixelPos;
+                        float2 p1 = LoadBezierPoint(i + 1 + pointOffset) - pixelPos;
+                        float2 p2 = LoadBezierPoint(i + 2 + pointOffset) - pixelPos;
+#else
                 int pointOffset = GlyphMetaData[dataOffset];
                 int numContours = GlyphMetaData[dataOffset + 1];
                 dataOffset += 2;
@@ -161,6 +249,7 @@ Shader "Seb.Vis.Text/TextShader"
                         float2 p0 = BezierData[i + 0 + pointOffset] - pixelPos;
                         float2 p1 = BezierData[i + 1 + pointOffset] - pixelPos;
                         float2 p2 = BezierData[i + 2 + pointOffset] - pixelPos;
+#endif
 
                         // Check if curve segment is going downwards (this means that a ray crossing
                         // it from left to right would be exiting the shape at this point).

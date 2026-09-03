@@ -53,7 +53,31 @@ Shader "Vis/Draw"
             float2 LayerOffset;
             float LayerScale;
 
+#if defined(SHADER_API_GLES3) || defined(SHADER_API_GLES)
+            Texture2D<float4> _InstanceDataTex;
+            int _InstanceTexWidth;
+
+            ShapeData LoadShapeData(uint index)
+            {
+                ShapeData data;
+                int baseTexel = int(index) * 4;
+                int w = _InstanceTexWidth;
+                float4 p0 = _InstanceDataTex.Load(int3(baseTexel % w, baseTexel / w, 0));
+                float4 p1 = _InstanceDataTex.Load(int3((baseTexel + 1) % w, (baseTexel + 1) / w, 0));
+                float4 p2 = _InstanceDataTex.Load(int3((baseTexel + 2) % w, (baseTexel + 2) / w, 0));
+                float4 p3 = _InstanceDataTex.Load(int3((baseTexel + 3) % w, (baseTexel + 3) / w, 0));
+
+                data.type = int(p0.x);
+                data.a = p0.yz;
+                data.b = float2(p0.w, p1.x);
+                data.param = p1.y;
+                data.maskMinMax = float4(p1.zw, p2.xy);
+                data.col = p3;
+                return data;
+            }
+#else
             StructuredBuffer<ShapeData> InstanceData;
+#endif
             uint InstanceOffset;
 
             static const int LINE_TYPE = 0;
@@ -86,7 +110,11 @@ Shader "Vis/Draw"
 
             v2f vert(appdata v, uint instanceID : SV_InstanceID)
             {
+#if defined(SHADER_API_GLES3) || defined(SHADER_API_GLES)
+                ShapeData instance = LoadShapeData(instanceID + InstanceOffset);
+#else
                 ShapeData instance = InstanceData[instanceID + InstanceOffset];
+#endif
                 v2f o;
                 o.shapeType = instance.type;
                 o.maskMinMax = instance.maskMinMax;
