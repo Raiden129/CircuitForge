@@ -118,6 +118,10 @@ namespace DLS.Bridge
 						HandleStep(requestId, req);
 						break;
 
+					case "list_catalog":
+						HandleListCatalog(requestId, req);
+						break;
+
 					default:
 						SendError(requestId, "UNKNOWN_COMMAND", $"Command not recognized: {req.command}");
 						break;
@@ -286,6 +290,48 @@ namespace DLS.Bridge
 				{ "steps", steps },
 				{ "revision", circuitRevision }
 			});
+		}
+
+		private void HandleListCatalog(string requestId, BridgeRequestModel req)
+		{
+			var builtinChips = BuiltinChipCreator.CreateAllBuiltinChipDescriptions()
+				.Select(b => new
+				{
+					name = b.Name,
+					type = "builtin",
+					input_pins = b.InputPins.Select(p => new { name = p.Name, bit_count = p.BitCount }).ToArray(),
+					output_pins = b.OutputPins.Select(p => new { name = p.Name, bit_count = p.BitCount }).ToArray()
+				}).ToList();
+
+			var customChipNames = Project.ActiveProject != null && Project.ActiveProject.chipLibrary != null
+				? Project.ActiveProject.chipLibrary.GetAllCustomChipNames()
+				: Array.Empty<string>();
+
+			var customChips = new List<object>();
+			if (Project.ActiveProject != null && Project.ActiveProject.chipLibrary != null)
+			{
+				foreach (var name in customChipNames)
+				{
+					if (Project.ActiveProject.chipLibrary.TryGetChipDescription(name, out var desc))
+					{
+						customChips.Add(new
+						{
+							name = desc.Name,
+							type = "custom",
+							input_pins = desc.InputPins.Select(p => new { name = p.Name, bit_count = p.BitCount }).ToArray(),
+							output_pins = desc.OutputPins.Select(p => new { name = p.Name, bit_count = p.BitCount }).ToArray()
+						});
+					}
+				}
+			}
+
+			SendResponse(requestId, true, $"Catalog: {builtinChips.Count} built-in chips, {customChips.Count} custom chips", new Dictionary<string, object>
+			{
+				{ "builtin_count", builtinChips.Count },
+				{ "custom_count", customChips.Count },
+				{ "builtin_chips", builtinChips },
+				{ "custom_chips", customChips }
+			}, new[] { "circuit_add_component", "circuit_get_snapshot" });
 		}
 
 		private void SendResponse(string requestId, bool ok, string summary, Dictionary<string, object> data, string[] nextActions = null)

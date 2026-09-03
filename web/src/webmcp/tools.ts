@@ -34,6 +34,19 @@ export const circuitGetCapabilitiesTool: WebMCPToolDefinition = {
   },
 };
 
+export const circuitListCatalogTool: WebMCPToolDefinition = {
+  name: 'circuit_list_catalog',
+  description: 'List all available built-in logic components, custom chips, and pin layouts.',
+  readOnlyHint: true,
+  inputSchema: {
+    type: 'object',
+    properties: {},
+  },
+  execute: async (_input, { signal }) => {
+    return unityBridge.send('list_catalog', {}, signal);
+  },
+};
+
 export const circuitSetInputTool: WebMCPToolDefinition = {
   name: 'circuit_set_input',
   description: 'Set logic value (0 or 1) on an input pin by pin_id or name in the active circuit.',

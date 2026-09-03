@@ -2,6 +2,7 @@ import { toolRegistry } from './webmcp/registry';
 import {
   circuitGetSnapshotTool,
   circuitGetCapabilitiesTool,
+  circuitListCatalogTool,
   circuitSetInputTool,
   circuitStepTool,
   circuitPauseTool,
@@ -30,6 +31,7 @@ async function init() {
 
     // Register inspection & simulation tools
     await toolRegistry.register(circuitGetCapabilitiesTool);
+    await toolRegistry.register(circuitListCatalogTool);
     await toolRegistry.register(circuitGetSnapshotTool);
     await toolRegistry.register(circuitSetInputTool);
     await toolRegistry.register(circuitStepTool);
