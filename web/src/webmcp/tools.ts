@@ -317,3 +317,40 @@ export const circuitClearWorkspaceTool: WebMCPToolDefinition = {
     return unityBridge.send('clear_workspace', input, signal);
   },
 };
+
+export const circuitVerifyTruthTableTool: WebMCPToolDefinition = {
+  name: 'circuit_verify_truth_table',
+  description: 'Test an entire truth table against the active circuit and report row-by-row pass/fail results with mismatch diagnosis.',
+  readOnlyHint: true,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      inputs: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional list of input pin names or IDs in order. Auto-detected if omitted.',
+      },
+      outputs: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional list of output pin names, IDs, or LEDs in order. Auto-detected if omitted.',
+      },
+      rows: {
+        type: 'array',
+        description: 'Array of truth table rows: [{ inputs: [0, 0], expected: [0] }, ...] or flat arrays [[0, 0, 0], ...]',
+      },
+      expected: {
+        type: 'array',
+        description: 'Alternative alias for rows.',
+      },
+      ticks_per_row: {
+        type: 'number',
+        description: 'Simulation ticks to advance per row (default: 2).',
+        default: 2,
+      },
+    },
+  },
+  execute: async (input: any, { signal }) => {
+    return unityBridge.send('verify_truth_table', input, signal);
+  },
+};

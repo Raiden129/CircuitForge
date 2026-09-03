@@ -438,19 +438,40 @@ namespace DLS.Game
 					// -- Subchip --
 					else if (element is SubChipInstance subChip)
 					{
-						// Update the state of each output pin on the subchip to match the state of corresponding pin in the simulation
-						foreach (PinInstance subChipOutputPin in subChip.OutputPins)
+						// Update the state of each input pin on the subchip to match the simulation
+						if (subChip.InputPins != null)
 						{
-							SimPin simPin = simChip.GetSimPinFromAddress(subChipOutputPin.Address);
-							subChipOutputPin.State = simPin.State;
-
-							// If is bus, copy colour from the input source
-							if (ChipTypeHelper.IsBusOriginType(subChip.ChipType))
+							foreach (PinInstance subChipInputPin in subChip.InputPins)
 							{
-								SimPin simInputPin = simChip.GetSimPinFromAddress(subChip.InputPins[0].Address);
-								if (simInputPin.latestSourceID == -1) continue;
-								PinInstance colSource = TryFindPinFromSimPinSource(simChip, simInputPin);
-								subChipOutputPin.Colour = colSource.Colour;
+								try
+								{
+									SimPin simPin = simChip.GetSimPinFromAddress(subChipInputPin.Address);
+									subChipInputPin.State = simPin.State;
+								}
+								catch { }
+							}
+						}
+
+						// Update the state of each output pin on the subchip to match the state of corresponding pin in the simulation
+						if (subChip.OutputPins != null)
+						{
+							foreach (PinInstance subChipOutputPin in subChip.OutputPins)
+							{
+								try
+								{
+									SimPin simPin = simChip.GetSimPinFromAddress(subChipOutputPin.Address);
+									subChipOutputPin.State = simPin.State;
+
+									// If is bus, copy colour from the input source
+									if (ChipTypeHelper.IsBusOriginType(subChip.ChipType))
+									{
+										SimPin simInputPin = simChip.GetSimPinFromAddress(subChip.InputPins[0].Address);
+										if (simInputPin.latestSourceID == -1) continue;
+										PinInstance colSource = TryFindPinFromSimPinSource(simChip, simInputPin);
+										subChipOutputPin.Colour = colSource.Colour;
+									}
+								}
+								catch { }
 							}
 						}
 					}

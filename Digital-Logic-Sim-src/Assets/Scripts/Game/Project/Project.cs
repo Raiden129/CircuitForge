@@ -581,8 +581,14 @@ namespace DLS.Game
 			}
 		}
 
+		public void RefreshInputPins()
+		{
+			if (ViewedChip != null) inputPins = ViewedChip.GetInputPins();
+		}
+
 		void Debug_RunMainThreadSimStep()
 		{
+			RefreshInputPins();
 			Simulator.ApplyModifications();
 
 			if (simPaused && !advanceSingleSimStep)
@@ -605,6 +611,18 @@ namespace DLS.Game
 			Simulator.stepsPerClockTransition = stepsPerClockTransition;
 			Simulator.RunSimulationStep(rootSimChip, inputPins, audioState.simAudio);
 			ViewedChip.UpdateStateFromSim(ViewedSimChip, !CanEditViewedChip);
+		}
+
+		public void StepSimulationDirect(int count = 1)
+		{
+			RefreshInputPins();
+			for (int i = 0; i < count; i++)
+			{
+				Simulator.stepsPerClockTransition = stepsPerClockTransition;
+				Simulator.ApplyModifications();
+				Simulator.RunSimulationStep(rootSimChip, inputPins, audioState.simAudio);
+				ViewedChip.UpdateStateFromSim(ViewedSimChip, true);
+			}
 		}
 
 		public void UpdateAndSaveProjectDescription()

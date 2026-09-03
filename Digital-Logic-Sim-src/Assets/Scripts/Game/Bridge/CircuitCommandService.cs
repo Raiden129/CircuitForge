@@ -5,6 +5,7 @@ using DLS.Description;
 using DLS.Game;
 using DLS.SaveSystem;
 using DLS.Simulation;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace DLS.Bridge
@@ -253,6 +254,225 @@ namespace DLS.Bridge
 				{ "remaining_components", 0 },
 				{ "remaining_wires", 0 }
 			});
+		}
+
+		public CommandResult VerifyTruthTable(object inputsObj, object outputsObj, object rowsObj, int ticksPerRow = 2)
+		{
+			if (Project.ActiveProject == null || Project.ActiveProject.ViewedChip == null)
+			{
+				return CommandResult.Fail("NO_ACTIVE_PROJECT", "No active circuit project loaded", Revision);
+			}
+
+			DevChipInstance devChip = Project.ActiveProject.ViewedChip;
+
+			// 1. Resolve Input Pins
+			var devInputs = devChip.GetInputPins().OrderByDescending(p => p.Position.y).ToList();
+			List<DevPinInstance> resolvedInputs = new();
+
+			if (inputsObj is JArray inArray && inArray.Count > 0)
+			{
+				foreach (var token in inArray)
+				{
+					string nameOrId = token.ToString();
+					var pin = devInputs.FirstOrDefault(p => p.ID.ToString() == nameOrId || (p.Name != null && p.Name.Equals(nameOrId, StringComparison.OrdinalIgnoreCase)));
+					if (pin == null)
+					{
+						return CommandResult.Fail("PIN_NOT_FOUND", $"Input pin '{nameOrId}' not found on active canvas.", Revision);
+					}
+					resolvedInputs.Add(pin);
+				}
+			}
+			else
+			{
+				resolvedInputs = devInputs;
+			}
+
+			if (resolvedInputs.Count == 0)
+			{
+				return CommandResult.Fail("NO_INPUTS", "No input pins found to drive truth table verification.", Revision);
+			}
+
+			// 2. Resolve Outputs (Dev Output Pins or LED subchips)
+			var devOutputs = devChip.GetOutputPins().OrderByDescending(p => p.Position.y).ToList();
+			var leds = devChip.GetSubchips().Where(s => s.Description.Name.Equals("LED", StringComparison.OrdinalIgnoreCase)).OrderByDescending(s => s.Position.y).ToList();
+
+			var outputTargets = new List<(string Name, Func<int> ReadValue)>();
+
+			if (outputsObj is JArray outArray && outArray.Count > 0)
+			{
+				foreach (var token in outArray)
+				{
+					string nameOrId = token.ToString();
+					var devOut = devOutputs.FirstOrDefault(p => p.ID.ToString() == nameOrId || (p.Name != null && p.Name.Equals(nameOrId, StringComparison.OrdinalIgnoreCase)));
+					if (devOut != null)
+					{
+						var captureDev = devOut;
+						outputTargets.Add((captureDev.Name, () => (int)PinState.GetBitStates(captureDev.Pin.State)));
+						continue;
+					}
+					var led = leds.FirstOrDefault(s => s.ID.ToString() == nameOrId || s.Label.Equals(nameOrId, StringComparison.OrdinalIgnoreCase) || s.Description.Name.Equals(nameOrId, StringComparison.OrdinalIgnoreCase));
+					if (led != null && led.InputPins.Length > 0)
+					{
+						var captureLed = led;
+						outputTargets.Add((string.IsNullOrEmpty(captureLed.Label) ? "LED" : captureLed.Label, () => (int)PinState.GetBitStates(captureLed.InputPins[0].State)));
+						continue;
+					}
+					if (ResolvePin(devChip, nameOrId, out PinInstance targetPin, out _))
+					{
+						var capturePin = targetPin;
+						outputTargets.Add((capturePin.Name, () => (int)PinState.GetBitStates(capturePin.State)));
+						continue;
+					}
+
+					return CommandResult.Fail("OUTPUT_NOT_FOUND", $"Output '{nameOrId}' not found on active canvas.", Revision);
+				}
+			}
+			else
+			{
+				if (devOutputs.Count > 0)
+				{
+					foreach (var d in devOutputs)
+					{
+						var captureDev = d;
+						outputTargets.Add((captureDev.Name, () => (int)PinState.GetBitStates(captureDev.Pin.State)));
+					}
+				}
+				else if (leds.Count > 0)
+				{
+					foreach (var l in leds)
+					{
+						var captureLed = l;
+						outputTargets.Add((string.IsNullOrEmpty(captureLed.Label) ? "LED" : captureLed.Label, () => (int)PinState.GetBitStates(captureLed.InputPins[0].State)));
+					}
+				}
+			}
+
+			if (outputTargets.Count == 0)
+			{
+				return CommandResult.Fail("NO_OUTPUTS", "No output pins or LEDs found to sample truth table results.", Revision);
+			}
+
+			// 3. Save original input states
+			var savedStates = resolvedInputs.Select(p => PinState.GetBitStates(p.Pin.PlayerInputState)).ToArray();
+
+			// 4. Parse rows
+			if (rowsObj is not JArray rowsArray || rowsArray.Count == 0)
+			{
+				return CommandResult.Fail("MISSING_ROWS", "Must provide 'rows' or 'expected' array of truth table vectors.", Revision);
+			}
+
+			var rowResults = new List<Dictionary<string, object>>();
+			int passedCount = 0;
+			int failedCount = 0;
+			Dictionary<string, object> firstMismatch = null;
+
+			int tickCount = Math.Max(1, Math.Min(20, ticksPerRow));
+
+			for (int r = 0; r < rowsArray.Count; r++)
+			{
+				var rowToken = rowsArray[r];
+				List<int> inputVector = new();
+				List<int> expectedVector = new();
+
+				if (rowToken is JObject rowObj)
+				{
+					if (rowObj["inputs"] is JArray inVals)
+					{
+						inputVector = inVals.Select(v => (int)v).ToList();
+					}
+					var outToken = rowObj["outputs"] ?? rowObj["expected"];
+					if (outToken is JArray outVals)
+					{
+						expectedVector = outVals.Select(v => (int)v).ToList();
+					}
+				}
+				else if (rowToken is JArray rowFlat)
+				{
+					int inCount = resolvedInputs.Count;
+					int outCount = outputTargets.Count;
+					for (int i = 0; i < inCount && i < rowFlat.Count; i++)
+					{
+						inputVector.Add((int)rowFlat[i]);
+					}
+					for (int o = inCount; o < inCount + outCount && o < rowFlat.Count; o++)
+					{
+						expectedVector.Add((int)rowFlat[o]);
+					}
+				}
+
+				// Apply inputs
+				for (int i = 0; i < resolvedInputs.Count && i < inputVector.Count; i++)
+				{
+					PinState.Set(ref resolvedInputs[i].Pin.PlayerInputState, (ushort)inputVector[i], 0);
+				}
+
+				// Step simulation
+				Project.ActiveProject.StepSimulationDirect(tickCount);
+
+				// Sample outputs
+				List<int> actualVector = new();
+				for (int o = 0; o < outputTargets.Count; o++)
+				{
+					actualVector.Add(outputTargets[o].ReadValue());
+				}
+
+				// Compare
+				bool match = true;
+				for (int o = 0; o < expectedVector.Count && o < actualVector.Count; o++)
+				{
+					if (expectedVector[o] != actualVector[o])
+					{
+						match = false;
+						break;
+					}
+				}
+
+				if (match) passedCount++;
+				else failedCount++;
+
+				var rowRecord = new Dictionary<string, object>
+				{
+					{ "row", r },
+					{ "inputs", inputVector },
+					{ "expected", expectedVector },
+					{ "actual", actualVector },
+					{ "passed", match }
+				};
+
+				if (!match && firstMismatch == null)
+				{
+					firstMismatch = rowRecord;
+				}
+
+				rowResults.Add(rowRecord);
+			}
+
+			// 5. Restore original input states
+			for (int i = 0; i < resolvedInputs.Count; i++)
+			{
+				PinState.Set(ref resolvedInputs[i].Pin.PlayerInputState, savedStates[i], 0);
+			}
+			Project.ActiveProject.StepSimulationDirect(tickCount);
+
+			bool allPassed = failedCount == 0;
+			string summary = allPassed
+				? $"Truth table 100% verified ({passedCount}/{rowsArray.Count} vectors passed)."
+				: $"Truth table verification failed: {failedCount} mismatch(es) out of {rowsArray.Count} vectors (first mismatch at row {firstMismatch?["row"]}).";
+
+			var resultData = new Dictionary<string, object>
+			{
+				{ "all_passed", allPassed },
+				{ "total_rows", rowsArray.Count },
+				{ "passed_rows", passedCount },
+				{ "failed_rows", failedCount },
+				{ "inputs", resolvedInputs.Select(p => p.Name).ToArray() },
+				{ "outputs", outputTargets.Select(o => o.Name).ToArray() },
+				{ "first_mismatch", firstMismatch },
+				{ "results", rowResults },
+				{ "revision", Revision }
+			};
+
+			return CommandResult.Success(Revision, summary, resultData);
 		}
 
 		public CommandResult ConnectPins(object sourcePinRef, object targetPinRef)

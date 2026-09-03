@@ -176,6 +176,10 @@ namespace DLS.Bridge
 						DispatchCommandResult(requestId, commandService.ClearWorkspace());
 						break;
 
+					case "verify_truth_table":
+						HandleVerifyTruthTable(requestId, req);
+						break;
+
 					default:
 						SendError(requestId, "UNKNOWN_COMMAND", $"Command not recognized: {req.command}");
 						break;
@@ -502,6 +506,26 @@ namespace DLS.Bridge
 			}
 
 			var res = commandService.DeleteComponent(comp);
+			DispatchCommandResult(requestId, res);
+		}
+
+		private void HandleVerifyTruthTable(string requestId, BridgeRequestModel req)
+		{
+			object inputs = null;
+			object outputs = null;
+			object rows = null;
+			int ticksPerRow = 2;
+
+			if (req.payload != null)
+			{
+				if (req.payload.ContainsKey("inputs")) inputs = req.payload["inputs"];
+				if (req.payload.ContainsKey("outputs")) outputs = req.payload["outputs"];
+				if (req.payload.ContainsKey("rows")) rows = req.payload["rows"];
+				else if (req.payload.ContainsKey("expected")) rows = req.payload["expected"];
+				if (req.payload.ContainsKey("ticks_per_row")) ticksPerRow = Convert.ToInt32(req.payload["ticks_per_row"]);
+			}
+
+			var res = commandService.VerifyTruthTable(inputs, outputs, rows, ticksPerRow);
 			DispatchCommandResult(requestId, res);
 		}
 
