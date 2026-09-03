@@ -64,7 +64,14 @@ namespace Seb.Vis.Internal
 			mat.SetFloat(transformScaleID, layerInfo.scale);
 			mat.SetInt(screenSpaceID, layerInfo.useScreenSpace ? 1 : 0);
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+			if (count > 0)
+			{
+				cmd.DrawMeshInstancedProcedural(mesh, 0, mat, 0, count);
+			}
+#else
 			cmd.DrawMeshInstancedIndirect(mesh, 0, mat, 0, argsBuf, argsByteOffset);
+#endif
 
 			groupIndex++;
 		}

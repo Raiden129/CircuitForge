@@ -71,10 +71,12 @@ async function init() {
   // 2. Load Unity WebGL if available
   const canvas = document.querySelector<HTMLCanvasElement>('#unity-canvas');
   const buildUrl = '/unity/Build';
+  const baseName = 'unity';
   const loaderUrl = `${buildUrl}/unity.loader.js`;
 
   try {
     const loaderCheck = await fetch(loaderUrl, { method: 'HEAD' });
+
     if (loaderCheck.ok && canvas) {
       if (loadingText) loadingText.textContent = 'Loading Unity WebGL Engine...';
 
@@ -88,12 +90,12 @@ async function init() {
         }
 
         const config = {
-          dataUrl: `${buildUrl}/unity.data`,
-          frameworkUrl: `${buildUrl}/unity.framework.js`,
-          codeUrl: `${buildUrl}/unity.wasm`,
+          dataUrl: `${buildUrl}/${baseName}.data`,
+          frameworkUrl: `${buildUrl}/${baseName}.framework.js`,
+          codeUrl: `${buildUrl}/${baseName}.wasm`,
           streamingAssetsUrl: 'StreamingAssets',
           companyName: 'SebastianLague',
-          productName: 'Digital Logic Sim',
+          productName: 'Digital-Logic-Sim',
           productVersion: '2.1.6',
         };
 
@@ -169,4 +171,8 @@ async function init() {
   });
 }
 
-window.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

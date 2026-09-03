@@ -87,7 +87,14 @@ namespace Seb.Vis.Text.Rendering
 
 			// Render
 			// Note: world bounds are: (globalOffset + boundsCentre, boundsSize)
+#if UNITY_WEBGL && !UNITY_EDITOR
+			if (perGlyphInstanceData.Count > 0)
+			{
+				cmd.DrawMeshInstancedProcedural(quadMesh, 0, fontMat, 0, perGlyphInstanceData.Count);
+			}
+#else
 			cmd.DrawMeshInstancedIndirect(quadMesh, 0, fontMat, 0, argsBuffer, 0);
+#endif
 		}
 
 		public static BoundingBox CalculateLocalBounds(ReadOnlySpan<char> text, FontData fontData, LayoutSettings settings) => CreateTextLayout(text, fontData, settings);

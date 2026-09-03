@@ -7,7 +7,6 @@ using DLS.Game;
 using DLS.Description;
 using DLS.Simulation;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace DLS.Bridge
 {
@@ -91,7 +90,7 @@ namespace DLS.Bridge
 							{ "bundles", new[] { "inspect", "edit", "simulate", "learn" } },
 							{ "active_chip", Project.ActiveProject != null ? Project.ActiveProject.ActiveDevChipName : "" },
 							{ "can_edit", Project.ActiveProject != null && Project.ActiveProject.CanEditViewedChip },
-							{ "paused", Project.ActiveProject != null && Project.ActiveProject.SimPaused },
+							{ "paused", Project.ActiveProject != null && Project.ActiveProject.simPaused },
 							{ "revision", circuitRevision }
 						});
 						break;
@@ -100,26 +99,26 @@ namespace DLS.Bridge
 						HandleGetSnapshot(requestId, req);
 						break;
 
+					case "list_catalog":
+						HandleListCatalog(requestId, req);
+						break;
+
 					case "set_input":
 						HandleSetInput(requestId, req);
 						break;
 
 					case "pause":
-						if (Project.ActiveProject != null) Project.ActiveProject.simPaused = true;
+						if (Project.ActiveProject != null) Project.ActiveProject.description.Prefs_SimPaused = true;
 						SendResponse(requestId, true, "Simulation paused", new Dictionary<string, object> { { "paused", true } });
 						break;
 
 					case "run":
-						if (Project.ActiveProject != null) Project.ActiveProject.simPaused = false;
+						if (Project.ActiveProject != null) Project.ActiveProject.description.Prefs_SimPaused = false;
 						SendResponse(requestId, true, "Simulation running", new Dictionary<string, object> { { "paused", false } });
 						break;
 
 					case "step":
 						HandleStep(requestId, req);
-						break;
-
-					case "list_catalog":
-						HandleListCatalog(requestId, req);
 						break;
 
 					default:
@@ -154,8 +153,8 @@ namespace DLS.Bridge
 					name = sub.Description.Name,
 					label = sub.Label,
 					position = new { x = sub.Position.x, y = sub.Position.y },
-					input_pin_count = sub.InputPins.Length,
-					output_pin_count = sub.OutputPins.Length
+					input_pin_count = sub.InputPins != null ? sub.InputPins.Length : 0,
+					output_pin_count = sub.OutputPins != null ? sub.OutputPins.Length : 0
 				});
 			}
 
@@ -165,10 +164,10 @@ namespace DLS.Bridge
 				inputPinsList.Add(new
 				{
 					id = p.ID,
-					name = p.PinName,
-					bit_count = p.BitCount,
+					name = p.Name,
+					bit_count = (int)p.BitCount,
 					position = new { x = p.Position.x, y = p.Position.y },
-					state = PinState.GetBitStates(p.State)
+					state = PinState.GetBitStates(p.Pin.State)
 				});
 			}
 
@@ -178,10 +177,10 @@ namespace DLS.Bridge
 				outputPinsList.Add(new
 				{
 					id = p.ID,
-					name = p.PinName,
-					bit_count = p.BitCount,
+					name = p.Name,
+					bit_count = (int)p.BitCount,
 					position = new { x = p.Position.x, y = p.Position.y },
-					state = PinState.GetBitStates(p.State)
+					state = PinState.GetBitStates(p.Pin.State)
 				});
 			}
 
@@ -190,15 +189,20 @@ namespace DLS.Bridge
 			{
 				wiresList.Add(new
 				{
-					wire_id = w.ID,
-					source_pin_id = w.SourcePin != null ? w.SourcePin.ID : 0,
-					target_pin_id = w.TargetPin != null ? w.TargetPin.ID : 0
+					wire_id = w.spawnOrder,
+					source = w.SourcePin != null ? $"{w.SourcePin.Address.PinOwnerID}:{w.SourcePin.Address.PinID}" : "",
+					source_name = w.SourcePin != null ? w.SourcePin.Name : "",
+					target = w.TargetPin != null ? $"{w.TargetPin.Address.PinOwnerID}:{w.TargetPin.Address.PinID}" : "",
+					target_name = w.TargetPin != null ? w.TargetPin.Name : ""
 				});
 			}
 
+			string projName = Project.ActiveProject.description.ProjectName;
+			if (string.IsNullOrEmpty(projName)) projName = "Sandbox";
+
 			var data = new Dictionary<string, object>
 			{
-				{ "project_name", Project.ActiveProject.description != null ? Project.ActiveProject.description.ProjectName : "Sandbox" },
+				{ "project_name", projName },
 				{ "active_chip", chipName },
 				{ "revision", circuitRevision },
 				{ "subchip_count", subchipsList.Count },
@@ -210,6 +214,48 @@ namespace DLS.Bridge
 			};
 
 			SendResponse(requestId, true, $"Snapshot of '{chipName}': {subchipsList.Count} components, {wiresList.Count} wires, {inputPinsList.Count} inputs, {outputPinsList.Count} outputs", data, new[] { "circuit_add_component", "circuit_connect", "circuit_set_input" });
+		}
+
+		private void HandleListCatalog(string requestId, BridgeRequestModel req)
+		{
+			var builtinChips = BuiltinChipCreator.CreateAllBuiltinChipDescriptions()
+				.Select(b => new
+				{
+					name = b.Name,
+					type = "builtin",
+					input_pins = b.InputPins.Select(p => new { name = p.Name, bit_count = (int)p.BitCount }).ToArray(),
+					output_pins = b.OutputPins.Select(p => new { name = p.Name, bit_count = (int)p.BitCount }).ToArray()
+				}).ToList();
+
+			var customChipNames = Project.ActiveProject != null && Project.ActiveProject.chipLibrary != null
+				? Project.ActiveProject.chipLibrary.GetAllCustomChipNames()
+				: Array.Empty<string>();
+
+			var customChips = new List<object>();
+			if (Project.ActiveProject != null && Project.ActiveProject.chipLibrary != null)
+			{
+				foreach (var name in customChipNames)
+				{
+					if (Project.ActiveProject.chipLibrary.TryGetChipDescription(name, out var desc))
+					{
+						customChips.Add(new
+						{
+							name = desc.Name,
+							type = "custom",
+							input_pins = desc.InputPins.Select(p => new { name = p.Name, bit_count = (int)p.BitCount }).ToArray(),
+							output_pins = desc.OutputPins.Select(p => new { name = p.Name, bit_count = (int)p.BitCount }).ToArray()
+						});
+					}
+				}
+			}
+
+			SendResponse(requestId, true, $"Catalog: {builtinChips.Count} built-in chips, {customChips.Count} custom chips", new Dictionary<string, object>
+			{
+				{ "builtin_count", builtinChips.Count },
+				{ "custom_count", customChips.Count },
+				{ "builtin_chips", builtinChips },
+				{ "custom_chips", customChips }
+			}, new[] { "circuit_add_component", "circuit_get_snapshot" });
 		}
 
 		private void HandleSetInput(string requestId, BridgeRequestModel req)
@@ -235,7 +281,7 @@ namespace DLS.Bridge
 			}
 
 			DevChipInstance devChip = Project.ActiveProject.ViewedChip;
-			DevPinInstance targetPin = devChip.GetInputPins().FirstOrDefault(p => p.ID.ToString() == pinIdOrName || p.PinName.Equals(pinIdOrName, StringComparison.OrdinalIgnoreCase));
+			DevPinInstance targetPin = devChip.GetInputPins().FirstOrDefault(p => p.ID.ToString() == pinIdOrName || (p.Name != null && p.Name.Equals(pinIdOrName, StringComparison.OrdinalIgnoreCase)));
 
 			if (targetPin == null)
 			{
@@ -256,10 +302,10 @@ namespace DLS.Bridge
 			circuitRevision++;
 			ushort currentVal = PinState.GetBitStates(targetPin.Pin.PlayerInputState);
 
-			SendResponse(requestId, true, $"Set input '{targetPin.PinName}' to {currentVal}", new Dictionary<string, object>
+			SendResponse(requestId, true, $"Set input '{targetPin.Name}' to {currentVal}", new Dictionary<string, object>
 			{
 				{ "pin_id", targetPin.ID },
-				{ "name", targetPin.PinName },
+				{ "name", targetPin.Name },
 				{ "value", currentVal },
 				{ "revision", circuitRevision }
 			}, new[] { "circuit_step", "circuit_get_snapshot" });
@@ -290,48 +336,6 @@ namespace DLS.Bridge
 				{ "steps", steps },
 				{ "revision", circuitRevision }
 			});
-		}
-
-		private void HandleListCatalog(string requestId, BridgeRequestModel req)
-		{
-			var builtinChips = BuiltinChipCreator.CreateAllBuiltinChipDescriptions()
-				.Select(b => new
-				{
-					name = b.Name,
-					type = "builtin",
-					input_pins = b.InputPins.Select(p => new { name = p.Name, bit_count = p.BitCount }).ToArray(),
-					output_pins = b.OutputPins.Select(p => new { name = p.Name, bit_count = p.BitCount }).ToArray()
-				}).ToList();
-
-			var customChipNames = Project.ActiveProject != null && Project.ActiveProject.chipLibrary != null
-				? Project.ActiveProject.chipLibrary.GetAllCustomChipNames()
-				: Array.Empty<string>();
-
-			var customChips = new List<object>();
-			if (Project.ActiveProject != null && Project.ActiveProject.chipLibrary != null)
-			{
-				foreach (var name in customChipNames)
-				{
-					if (Project.ActiveProject.chipLibrary.TryGetChipDescription(name, out var desc))
-					{
-						customChips.Add(new
-						{
-							name = desc.Name,
-							type = "custom",
-							input_pins = desc.InputPins.Select(p => new { name = p.Name, bit_count = p.BitCount }).ToArray(),
-							output_pins = desc.OutputPins.Select(p => new { name = p.Name, bit_count = p.BitCount }).ToArray()
-						});
-					}
-				}
-			}
-
-			SendResponse(requestId, true, $"Catalog: {builtinChips.Count} built-in chips, {customChips.Count} custom chips", new Dictionary<string, object>
-			{
-				{ "builtin_count", builtinChips.Count },
-				{ "custom_count", customChips.Count },
-				{ "builtin_chips", builtinChips },
-				{ "custom_chips", customChips }
-			}, new[] { "circuit_add_component", "circuit_get_snapshot" });
 		}
 
 		private void SendResponse(string requestId, bool ok, string summary, Dictionary<string, object> data, string[] nextActions = null)
