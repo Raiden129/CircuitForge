@@ -65,10 +65,14 @@ export const circuitSetInputTool: WebMCPToolDefinition = {
         type: 'number',
         description: 'Logic value to set (0 or 1).',
       },
+      expected_revision: {
+        type: 'number',
+        description: 'Expected circuit revision before mutation.',
+      },
     },
     required: [],
   },
-  execute: async (input: { pin_id?: string; name?: string; value?: number }, { signal }) => {
+  execute: async (input: { pin_id?: string; name?: string; value?: number; expected_revision?: number }, { signal }) => {
     return unityBridge.send('set_input', input, signal);
   },
 };
@@ -112,5 +116,166 @@ export const circuitRunTool: WebMCPToolDefinition = {
   },
   execute: async (_input, { signal }) => {
     return unityBridge.send('run', {}, signal);
+  },
+};
+
+export const circuitAddComponentTool: WebMCPToolDefinition = {
+  name: 'circuit_add_component',
+  description: 'Programmatically place a logic gate, IC, or IO pin on the active circuit board.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      type: {
+        type: 'string',
+        description: 'Component type to place (e.g. "AND", "OR", "NAND", "NOT", "XOR", "LED", "IN-1", "OUT-1").',
+      },
+      x: {
+        type: 'number',
+        description: 'Optional canvas X coordinate. Auto-layout is applied if omitted.',
+      },
+      y: {
+        type: 'number',
+        description: 'Optional canvas Y coordinate. Auto-layout is applied if omitted.',
+      },
+      label: {
+        type: 'string',
+        description: 'Optional human-readable label or name for this instance.',
+      },
+      component_id: {
+        type: 'number',
+        description: 'Optional specific component ID to assign.',
+      },
+      expected_revision: {
+        type: 'number',
+        description: 'Expected circuit revision before mutation.',
+      },
+    },
+    required: ['type'],
+  },
+  execute: async (input: { type: string; x?: number; y?: number; label?: string; component_id?: number; expected_revision?: number }, { signal }) => {
+    return unityBridge.send('add_component', input, signal);
+  },
+};
+
+export const circuitConnectTool: WebMCPToolDefinition = {
+  name: 'circuit_connect',
+  description: 'Connect two pins with a wire, with automatic direction and bit-width validation.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      source_pin: {
+        description: 'Source pin identifier (e.g. "ownerId:pinId", "NAND:OUT", or DevPin ID/name).',
+      },
+      target_pin: {
+        description: 'Target pin identifier (e.g. "ownerId:pinId", "LED:IN", or DevPin ID/name).',
+      },
+      expected_revision: {
+        type: 'number',
+        description: 'Expected circuit revision before mutation.',
+      },
+    },
+    required: ['source_pin', 'target_pin'],
+  },
+  execute: async (input: { source_pin: any; target_pin: any; expected_revision?: number }, { signal }) => {
+    return unityBridge.send('connect', input, signal);
+  },
+};
+
+export const circuitDisconnectTool: WebMCPToolDefinition = {
+  name: 'circuit_disconnect',
+  description: 'Remove a wire connection by wire_id or by connected pin pair.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      wire_id: {
+        type: 'number',
+        description: 'ID of the wire to remove.',
+      },
+      source_pin: {
+        description: 'Alternative: Source pin of the connection to remove.',
+      },
+      target_pin: {
+        description: 'Alternative: Target pin of the connection to remove.',
+      },
+      expected_revision: {
+        type: 'number',
+        description: 'Expected circuit revision before mutation.',
+      },
+    },
+  },
+  execute: async (input: { wire_id?: number; source_pin?: any; target_pin?: any; expected_revision?: number }, { signal }) => {
+    return unityBridge.send('disconnect', input, signal);
+  },
+};
+
+export const circuitInspectComponentTool: WebMCPToolDefinition = {
+  name: 'circuit_inspect_component',
+  description: 'Inspect detailed properties of a specific component: type, label, position, all pin signals, and connected wires.',
+  readOnlyHint: true,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      component_id: {
+        description: 'Component ID or name/label to inspect.',
+      },
+    },
+    required: ['component_id'],
+  },
+  execute: async (input: { component_id: any }, { signal }) => {
+    return unityBridge.send('inspect_component', input, signal);
+  },
+};
+
+export const circuitAnalyzeTool: WebMCPToolDefinition = {
+  name: 'circuit_analyze',
+  description: 'Perform static and graph analysis: detect floating inputs, unconnected outputs, and structural health.',
+  readOnlyHint: true,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      scope: {
+        type: 'string',
+        enum: ['all', 'floating', 'connectivity'],
+        description: 'Analysis scope to perform.',
+        default: 'all',
+      },
+    },
+  },
+  execute: async (input: { scope?: string } = {}, { signal }) => {
+    return unityBridge.send('analyze', input, signal);
+  },
+};
+
+export const circuitUndoTool: WebMCPToolDefinition = {
+  name: 'circuit_undo',
+  description: 'Undo the last circuit mutation action.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      expected_revision: {
+        type: 'number',
+        description: 'Expected circuit revision before undo.',
+      },
+    },
+  },
+  execute: async (input: { expected_revision?: number } = {}, { signal }) => {
+    return unityBridge.send('undo', input, signal);
+  },
+};
+
+export const circuitRedoTool: WebMCPToolDefinition = {
+  name: 'circuit_redo',
+  description: 'Redo the previously undone circuit action.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      expected_revision: {
+        type: 'number',
+        description: 'Expected circuit revision before redo.',
+      },
+    },
+  },
+  execute: async (input: { expected_revision?: number } = {}, { signal }) => {
+    return unityBridge.send('redo', input, signal);
   },
 };

@@ -52,10 +52,14 @@ export class UnityBridge {
     }
 
     const requestId = crypto.randomUUID();
+    const expectedRevision = typeof payload?.expected_revision === 'number'
+      ? payload.expected_revision
+      : this.currentRevision;
+
     const rawRequest: BridgeRequestType = {
       request_id: requestId,
       command,
-      expected_revision: this.currentRevision,
+      expected_revision: expectedRevision,
       payload,
     };
 

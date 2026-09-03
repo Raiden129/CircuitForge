@@ -17,7 +17,8 @@ namespace DLS.Bridge
 
 		private static CircuitForgeBridge instance;
 		private readonly Queue<string> incomingQueue = new();
-		private int circuitRevision = 1;
+		private readonly CircuitCommandService commandService = new();
+		public int circuitRevision => commandService.Revision;
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
 		private static void Init()
@@ -56,6 +57,11 @@ namespace DLS.Bridge
 			}
 		}
 
+		private static bool IsMutatingCommand(string cmd)
+		{
+			return cmd is "add_component" or "connect" or "disconnect" or "set_input" or "undo" or "redo";
+		}
+
 		private void ProcessRequest(string requestJson)
 		{
 			string requestId = Guid.NewGuid().ToString();
@@ -71,6 +77,19 @@ namespace DLS.Bridge
 				{
 					SendError(requestId, "INVALID_REQUEST", "Failed to deserialize request JSON");
 					return;
+				}
+
+				// Check expected revision for mutating commands
+				if (req.expected_revision.HasValue && req.expected_revision.Value > 0)
+				{
+					if (IsMutatingCommand(req.command))
+					{
+						if (!commandService.CheckRevision(req.expected_revision.Value, out var revErr))
+						{
+							SendError(requestId, revErr.ErrorCode, revErr.ErrorMessage, revErr.RecoveryHint);
+							return;
+						}
+					}
 				}
 
 				switch (req.command)
@@ -119,6 +138,34 @@ namespace DLS.Bridge
 
 					case "step":
 						HandleStep(requestId, req);
+						break;
+
+					case "add_component":
+						HandleAddComponent(requestId, req);
+						break;
+
+					case "connect":
+						HandleConnect(requestId, req);
+						break;
+
+					case "disconnect":
+						HandleDisconnect(requestId, req);
+						break;
+
+					case "inspect_component":
+						HandleInspectComponent(requestId, req);
+						break;
+
+					case "analyze":
+						HandleAnalyze(requestId, req);
+						break;
+
+					case "undo":
+						DispatchCommandResult(requestId, commandService.Undo());
+						break;
+
+					case "redo":
+						DispatchCommandResult(requestId, commandService.Redo());
 						break;
 
 					default:
@@ -319,7 +366,7 @@ namespace DLS.Bridge
 				targetPin.ToggleState(0);
 			}
 
-			circuitRevision++;
+			commandService.BumpRevision();
 			ushort currentVal = PinState.GetBitStates(targetPin.Pin.PlayerInputState);
 
 			SendResponse(requestId, true, $"Set input '{targetPin.Name}' to {currentVal}", new Dictionary<string, object>
@@ -350,12 +397,103 @@ namespace DLS.Bridge
 				Project.ActiveProject.advanceSingleSimStep = true;
 			}
 
-			circuitRevision++;
+			commandService.BumpRevision();
 			SendResponse(requestId, true, $"Stepped simulation by {steps} tick(s)", new Dictionary<string, object>
 			{
 				{ "steps", steps },
 				{ "revision", circuitRevision }
 			});
+		}
+
+		private void HandleAddComponent(string requestId, BridgeRequestModel req)
+		{
+			string chipType = null;
+			if (req.payload != null)
+			{
+				if (req.payload.ContainsKey("type")) chipType = req.payload["type"]?.ToString();
+				else if (req.payload.ContainsKey("name")) chipType = req.payload["name"]?.ToString();
+			}
+
+			float? x = null;
+			float? y = null;
+			if (req.payload != null && req.payload.ContainsKey("x")) x = Convert.ToSingle(req.payload["x"]);
+			if (req.payload != null && req.payload.ContainsKey("y")) y = Convert.ToSingle(req.payload["y"]);
+
+			string label = req.payload != null && req.payload.ContainsKey("label") ? req.payload["label"]?.ToString() : null;
+			int? customId = req.payload != null && req.payload.ContainsKey("component_id") ? Convert.ToInt32(req.payload["component_id"]) : null;
+
+			var res = commandService.AddComponent(chipType, x, y, label, customId);
+			DispatchCommandResult(requestId, res);
+		}
+
+		private void HandleConnect(string requestId, BridgeRequestModel req)
+		{
+			object src = null;
+			object tgt = null;
+			if (req.payload != null)
+			{
+				if (req.payload.ContainsKey("source_pin")) src = req.payload["source_pin"];
+				else if (req.payload.ContainsKey("source")) src = req.payload["source"];
+
+				if (req.payload.ContainsKey("target_pin")) tgt = req.payload["target_pin"];
+				else if (req.payload.ContainsKey("target")) tgt = req.payload["target"];
+			}
+
+			var res = commandService.ConnectPins(src, tgt);
+			DispatchCommandResult(requestId, res);
+		}
+
+		private void HandleDisconnect(string requestId, BridgeRequestModel req)
+		{
+			int? wireId = null;
+			object src = null;
+			object tgt = null;
+			if (req.payload != null)
+			{
+				if (req.payload.ContainsKey("wire_id")) wireId = Convert.ToInt32(req.payload["wire_id"]);
+				if (req.payload.ContainsKey("source_pin")) src = req.payload["source_pin"];
+				if (req.payload.ContainsKey("target_pin")) tgt = req.payload["target_pin"];
+			}
+
+			var res = commandService.DisconnectWire(wireId, src, tgt);
+			DispatchCommandResult(requestId, res);
+		}
+
+		private void HandleInspectComponent(string requestId, BridgeRequestModel req)
+		{
+			object comp = null;
+			if (req.payload != null)
+			{
+				if (req.payload.ContainsKey("component_id")) comp = req.payload["component_id"];
+				else if (req.payload.ContainsKey("name")) comp = req.payload["name"];
+			}
+
+			var res = commandService.InspectComponent(comp);
+			DispatchCommandResult(requestId, res);
+		}
+
+		private void HandleAnalyze(string requestId, BridgeRequestModel req)
+		{
+			string scope = "all";
+			if (req.payload != null && req.payload.ContainsKey("scope"))
+			{
+				scope = req.payload["scope"]?.ToString() ?? "all";
+			}
+
+			var res = commandService.AnalyzeCircuit(scope);
+			DispatchCommandResult(requestId, res);
+		}
+
+		private void DispatchCommandResult(string requestId, CommandResult res)
+		{
+			if (res.Ok)
+			{
+				SendResponse(requestId, true, res.Summary, res.Data, res.NextActions);
+			}
+			else
+			{
+				SendError(requestId, res.ErrorCode, res.ErrorMessage, res.RecoveryHint);
+			}
 		}
 
 		private void SendResponse(string requestId, bool ok, string summary, Dictionary<string, object> data, string[] nextActions = null)
@@ -375,7 +513,7 @@ namespace DLS.Bridge
 			DispatchToBrowser(requestId, json);
 		}
 
-		private void SendError(string requestId, string code, string message)
+		private void SendError(string requestId, string code, string message, string recovery = null)
 		{
 			var resp = new BridgeResponseModel
 			{
@@ -384,6 +522,7 @@ namespace DLS.Bridge
 				circuit_revision = circuitRevision,
 				summary = $"Error: {message}",
 				error = new BridgeErrorModel { code = code, message = message },
+				recovery = recovery,
 				data = new Dictionary<string, object>(),
 				warnings = new List<string>(),
 				next_actions = new List<string>()
@@ -415,7 +554,7 @@ namespace DLS.Bridge
 	{
 		public string request_id;
 		public string command;
-		public int expected_revision;
+		public int? expected_revision;
 		public Dictionary<string, object> payload;
 	}
 

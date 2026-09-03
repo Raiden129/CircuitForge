@@ -7,6 +7,13 @@ import {
   circuitStepTool,
   circuitPauseTool,
   circuitRunTool,
+  circuitAddComponentTool,
+  circuitConnectTool,
+  circuitDisconnectTool,
+  circuitInspectComponentTool,
+  circuitAnalyzeTool,
+  circuitUndoTool,
+  circuitRedoTool,
 } from './webmcp/tools';
 import { unityBridge } from './bridge/unity-bridge';
 import { ActivityTimeline } from './ui/activity-timeline';
@@ -37,10 +44,17 @@ async function init() {
     await toolRegistry.register(circuitGetCapabilitiesTool);
     await toolRegistry.register(circuitListCatalogTool);
     await toolRegistry.register(circuitGetSnapshotTool);
+    await toolRegistry.register(circuitInspectComponentTool);
+    await toolRegistry.register(circuitAnalyzeTool);
+    await toolRegistry.register(circuitAddComponentTool);
+    await toolRegistry.register(circuitConnectTool);
+    await toolRegistry.register(circuitDisconnectTool);
     await toolRegistry.register(circuitSetInputTool);
     await toolRegistry.register(circuitStepTool);
     await toolRegistry.register(circuitPauseTool);
     await toolRegistry.register(circuitRunTool);
+    await toolRegistry.register(circuitUndoTool);
+    await toolRegistry.register(circuitRedoTool);
 
     timeline.log({
       actor: 'human',
