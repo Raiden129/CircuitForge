@@ -475,6 +475,136 @@ namespace DLS.Bridge
 			return CommandResult.Success(Revision, summary, resultData);
 		}
 
+		public CommandResult PackageChip(string chipName, string colorHex = null, bool clearWorkspace = true)
+		{
+			if (Project.ActiveProject == null || Project.ActiveProject.ViewedChip == null)
+			{
+				return CommandResult.Fail("NO_ACTIVE_PROJECT", "No active circuit project loaded", Revision);
+			}
+
+			if (string.IsNullOrWhiteSpace(chipName))
+			{
+				return CommandResult.Fail("INVALID_NAME", "Chip name cannot be empty.", Revision);
+			}
+
+			chipName = chipName.Trim();
+
+			if (!SaveUtils.ValidFileName(chipName))
+			{
+				return CommandResult.Fail("INVALID_NAME", $"Chip name '{chipName}' contains invalid characters.", Revision);
+			}
+
+			if (BuiltinChipCreator.CreateAllBuiltinChipDescriptions().Any(b => b.Name.Equals(chipName, StringComparison.OrdinalIgnoreCase)))
+			{
+				return CommandResult.Fail("NAME_CONFLICT", $"'{chipName}' is a reserved built-in chip name.", Revision, "Choose a different custom chip name.");
+			}
+
+			if (Project.ActiveProject.chipLibrary.HasChip(chipName))
+			{
+				return CommandResult.Fail("DUPLICATE_CHIP_NAME", $"A chip named '{chipName}' already exists in the project library.", Revision, "Choose a unique chip name.");
+			}
+
+			DevChipInstance devChip = Project.ActiveProject.ViewedChip;
+
+			if (devChip.Elements.Count == 0)
+			{
+				return CommandResult.Fail("EMPTY_CANVAS", "Cannot package an empty canvas into a chip.", Revision, "Add components and wires before packaging.");
+			}
+
+			// Validate input pins
+			var inputPins = devChip.GetInputPins().ToList();
+			if (inputPins.Count == 0)
+			{
+				return CommandResult.Fail("NO_INPUT_PINS", "The circuit must contain at least one input pin (e.g. IN-1) to create a custom chip.", Revision, "Add an input pin (IN-1) using circuit_add_component.");
+			}
+
+			// Handle output pins: If no DevPinInstance outputs exist, check for LED and auto-convert
+			var outputPins = devChip.GetOutputPins().ToList();
+			if (outputPins.Count == 0)
+			{
+				var leds = devChip.GetSubchips().Where(s => s.Description.Name.Equals("LED", StringComparison.OrdinalIgnoreCase)).ToList();
+				if (leds.Count > 0)
+				{
+					foreach (var led in leds)
+					{
+						int ledId = led.ID;
+						Vector2 ledPos = led.Position;
+						string ledLabel = !string.IsNullOrEmpty(led.Label) ? led.Label : "OUT";
+
+						WireInstance inWire = devChip.Wires.FirstOrDefault(w => w.TargetPin != null && w.TargetPin.parent == led);
+
+						devChip.DeleteSubChip(led);
+
+						if (Project.ActiveProject.chipLibrary.TryGetChipDescription("OUT-1", out ChipDescription out1Desc))
+						{
+							PinDescription pinDesc = out1Desc.OutputPins[0];
+							pinDesc.ID = ledId;
+							pinDesc.Position = ledPos;
+							pinDesc.Name = ledLabel;
+
+							DevPinInstance devOutPin = new DevPinInstance(pinDesc, false);
+							devChip.AddNewDevPin(devOutPin, false);
+
+							if (inWire != null && inWire.SourcePin != null)
+							{
+								WireInstance.ConnectionInfo srcInfo = new WireInstance.ConnectionInfo { pin = inWire.SourcePin };
+								WireInstance.ConnectionInfo tgtInfo = new WireInstance.ConnectionInfo { pin = devOutPin.Pin };
+								Vector2[] pts = new Vector2[] { inWire.SourcePin.GetWorldPos(), devOutPin.Pin.GetWorldPos() };
+								WireInstance newWire = new WireInstance(srcInfo, tgtInfo, pts, devChip.Wires.Count);
+								devChip.AddWire(newWire, false);
+							}
+						}
+					}
+
+					devChip.RebuildSimulation();
+					outputPins = devChip.GetOutputPins().ToList();
+				}
+			}
+
+			if (outputPins.Count == 0)
+			{
+				return CommandResult.Fail("NO_OUTPUT_PINS", "The circuit must contain at least one output pin (e.g. OUT-1) to create a custom chip.", Revision, "Add an output pin (OUT-1) using circuit_add_component.");
+			}
+
+			// Create ChipDescription
+			ChipDescription desc = DescriptionCreator.CreateChipDescription(devChip);
+			desc.Name = chipName;
+
+			if (!string.IsNullOrEmpty(colorHex) && ColorUtility.TryParseHtmlString(colorHex, out Color parsedCol))
+			{
+				desc.Colour = parsedCol;
+			}
+
+			// Save chip to project library
+			Project.ActiveProject.SaveFromDescription(desc, Project.SaveMode.Normal);
+
+			var savedInPins = desc.InputPins.Select(p => new { name = p.Name, bit_count = (int)p.BitCount }).ToArray();
+			var savedOutPins = desc.OutputPins.Select(p => new { name = p.Name, bit_count = (int)p.BitCount }).ToArray();
+
+			if (clearWorkspace)
+			{
+				Project.ActiveProject.CreateBlankDevChip();
+			}
+
+			BumpRevision();
+
+			var data = new Dictionary<string, object>
+			{
+				{ "chip_name", chipName },
+				{ "input_pins", savedInPins },
+				{ "output_pins", savedOutPins },
+				{ "workspace_cleared", clearWorkspace },
+				{ "revision", Revision }
+			};
+
+			return CommandResult.Success(
+				Revision,
+				$"Packaged circuit into custom chip '{chipName}' ({savedInPins.Length} inputs, {savedOutPins.Length} outputs). It is now available in the catalog.",
+				data,
+				new[] { "circuit_list_catalog", "circuit_add_component" }
+			);
+		}
+
 		public CommandResult ConnectPins(object sourcePinRef, object targetPinRef)
 		{
 			if (Project.ActiveProject == null || Project.ActiveProject.ViewedChip == null)

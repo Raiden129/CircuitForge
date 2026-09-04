@@ -180,6 +180,10 @@ namespace DLS.Bridge
 						HandleVerifyTruthTable(requestId, req);
 						break;
 
+					case "package_chip":
+						HandlePackageChip(requestId, req);
+						break;
+
 					default:
 						SendError(requestId, "UNKNOWN_COMMAND", $"Command not recognized: {req.command}");
 						break;
@@ -526,6 +530,23 @@ namespace DLS.Bridge
 			}
 
 			var res = commandService.VerifyTruthTable(inputs, outputs, rows, ticksPerRow);
+			DispatchCommandResult(requestId, res);
+		}
+
+		private void HandlePackageChip(string requestId, BridgeRequestModel req)
+		{
+			string name = null;
+			string color = null;
+			bool clearWorkspace = true;
+
+			if (req.payload != null)
+			{
+				if (req.payload.ContainsKey("name")) name = req.payload["name"]?.ToString();
+				if (req.payload.ContainsKey("color")) color = req.payload["color"]?.ToString();
+				if (req.payload.ContainsKey("clear_workspace")) clearWorkspace = Convert.ToBoolean(req.payload["clear_workspace"]);
+			}
+
+			var res = commandService.PackageChip(name, color, clearWorkspace);
 			DispatchCommandResult(requestId, res);
 		}
 

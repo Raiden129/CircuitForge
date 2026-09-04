@@ -354,3 +354,34 @@ export const circuitVerifyTruthTableTool: WebMCPToolDefinition = {
     return unityBridge.send('verify_truth_table', input, signal);
   },
 };
+
+export const circuitPackageChipTool: WebMCPToolDefinition = {
+  name: 'circuit_package_chip',
+  description: 'Package the current circuit into a new, reusable custom logic chip saved to the library and toolbar.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        description: 'Name of the new custom chip (e.g. "MY_AND", "HALF_ADDER"). Must be unique.',
+      },
+      color: {
+        type: 'string',
+        description: 'Optional hex color for the chip body (e.g. "#38bdf8").',
+      },
+      clear_workspace: {
+        type: 'boolean',
+        description: 'Whether to clear the canvas after saving (default: true).',
+        default: true,
+      },
+      expected_revision: {
+        type: 'number',
+        description: 'Expected circuit revision before packaging.',
+      },
+    },
+    required: ['name'],
+  },
+  execute: async (input: { name: string; color?: string; clear_workspace?: boolean; expected_revision?: number }, { signal }) => {
+    return unityBridge.send('package_chip', input, signal);
+  },
+};
