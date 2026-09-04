@@ -33,12 +33,21 @@
       .brand {
         display: flex;
         align-items: center;
-        gap: 10px;
-        font-weight: 700;
-        letter-spacing: 0.5px;
+        gap: 12px;
       }
-      .brand span {
-        color: #58a6ff;
+      .brand a {
+        display: flex;
+        align-items: center;
+        text-decoration: none;
+      }
+      .brand-subtitle {
+        font-size: 11px;
+        color: #8b949e;
+        font-weight: 500;
+        letter-spacing: 0.2px;
+        border-left: 1px solid #30363d;
+        padding-left: 10px;
+        line-height: 1.2;
       }
       .status-pill {
         display: inline-flex;
@@ -154,8 +163,10 @@
   <body>
     <header>
       <div class="brand">
-        <span>⚡ CircuitForge</span>
-        <span style="font-size: 11px; color: #8b949e; font-weight: normal;">Agent-Native Digital Logic Studio</span>
+        <a href="/" aria-label="CircuitForge Home">
+          <img src="/logo-name.svg" alt="CircuitForge" style="height: 28px; width: auto; display: block;" />
+        </a>
+        <span class="brand-subtitle">Agent-Native Digital Logic Studio</span>
       </div>
       <div style="display: flex; gap: 12px; align-items: center;">
         <span id="revision-badge" style="font-size: 12px; font-family: monospace; color: #8b949e;">Rev: 0</span>
