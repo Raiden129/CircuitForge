@@ -36,6 +36,37 @@ async function init() {
   const loadingOverlay = document.getElementById('loading-overlay');
   const loadingText = document.getElementById('loading-text');
 
+  // Synchronize revision badge across all mutations (manual, bridge, and agent)
+  unityBridge.onRevision((rev) => {
+    if (revBadge) revBadge.textContent = `Rev: ${rev}`;
+  });
+
+  // Log all native WebMCP tool executions to the Activity Timeline
+  toolRegistry.onExecution((event, data) => {
+    if (event === 'start') {
+      const paramStr = data.input && Object.keys(data.input).length > 0
+        ? ` (${JSON.stringify(data.input).slice(0, 60)})`
+        : '';
+      timeline.log({
+        actor: 'agent',
+        action: data.toolName,
+        summary: `Agent invoking ${data.toolName}${paramStr}`,
+        revision: unityBridge.getRevision(),
+        ok: true,
+      });
+    } else if (event === 'end') {
+      const summary = data.result?.summary
+        || (data.result?.ok ? `${data.toolName} succeeded` : (data.error?.message || data.result?.error || 'Failed'));
+      timeline.log({
+        actor: 'agent',
+        action: `${data.toolName}_DONE`,
+        summary,
+        revision: data.result?.circuit_revision ?? unityBridge.getRevision(),
+        ok: data.error ? false : (data.result?.ok ?? true),
+      });
+    }
+  });
+
   // 1. Detect WebMCP
   const hasWebMCP = toolRegistry.isSupported();
   if (hasWebMCP) {

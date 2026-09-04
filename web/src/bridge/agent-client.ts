@@ -53,14 +53,6 @@ export class AgentRelayClient {
   }
 
   private async handleToolExecution(id: string, toolName: string, params: any) {
-    this.timeline.log({
-      actor: 'agent',
-      action: toolName,
-      summary: `External AI Agent executing ${toolName} via WebMCP...`,
-      revision: (window as any).unityBridge?.getRevision() ?? 0,
-      ok: true,
-    });
-
     let result: any = null;
 
     try {
@@ -78,7 +70,23 @@ export class AgentRelayClient {
           result = { ok: false, error: 'TOOL_NOT_FOUND', message: `Tool ${toolName} not registered` };
         }
       } else {
-        result = { ok: false, error: 'WEBMCP_UNAVAILABLE', message: 'document.modelContext not available' };
+        // Fallback when WebMCP is not available
+        this.timeline.log({
+          actor: 'agent',
+          action: toolName,
+          summary: `Agent executing ${toolName} (relay fallback)...`,
+          revision: (window as any).unityBridge?.getRevision() ?? 0,
+          ok: true,
+        });
+        const cmdName = toolName.replace(/^circuit_/, '');
+        result = await (window as any).unityBridge?.send(cmdName, params || {});
+        this.timeline.log({
+          actor: 'agent',
+          action: `${toolName}_DONE`,
+          summary: result?.summary || (result?.ok ? 'Tool executed successfully' : (result?.error || 'Failed')),
+          revision: result?.circuit_revision ?? (window as any).unityBridge?.getRevision() ?? 0,
+          ok: result?.ok ?? false,
+        });
       }
     } catch (err: any) {
       result = { ok: false, error: 'EXECUTION_FAILED', message: err?.message || String(err) };
@@ -91,13 +99,5 @@ export class AgentRelayClient {
         result
       }));
     }
-
-    this.timeline.log({
-      actor: 'agent',
-      action: `${toolName}_DONE`,
-      summary: result?.summary || (result?.ok ? 'Tool executed successfully' : (result?.error || 'Failed')),
-      revision: result?.circuit_revision ?? (window as any).unityBridge?.getRevision() ?? 0,
-      ok: result?.ok ?? false,
-    });
   }
 }

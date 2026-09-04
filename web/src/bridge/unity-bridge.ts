@@ -21,6 +21,7 @@ export class UnityBridge {
   private pending = new Map<string, PendingRequest>();
   private currentRevision = 0;
   private isReady = false;
+  private revisionListeners: ((rev: number) => void)[] = [];
 
   constructor() {
     window.CircuitForgeBridge = {
@@ -28,6 +29,10 @@ export class UnityBridge {
         this.handleResolve(requestId, responseJson);
       },
     };
+  }
+
+  public onRevision(listener: (rev: number) => void) {
+    this.revisionListeners.push(listener);
   }
 
   public setReady(ready: boolean) {
@@ -140,8 +145,15 @@ export class UnityBridge {
       const parsed = JSON.parse(responseJson);
       const validated = BridgeResponse.parse(parsed);
 
-      if (validated.ok) {
+      if (validated.ok && typeof validated.circuit_revision === 'number') {
         this.currentRevision = validated.circuit_revision;
+        for (const l of this.revisionListeners) {
+          try {
+            l(this.currentRevision);
+          } catch (err) {
+            console.error('[UnityBridge] Error in revision listener:', err);
+          }
+        }
       }
 
       this.pending.delete(requestId);

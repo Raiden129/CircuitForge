@@ -6,9 +6,20 @@ export interface WebMCPToolDefinition {
   readOnlyHint?: boolean;
 }
 
+export type ToolExecutionListener = (
+  event: 'start' | 'end',
+  data: {
+    toolName: string;
+    input: any;
+    result?: any;
+    error?: any;
+  }
+) => void;
+
 export class ToolRegistry {
   private registeredTools = new Map<string, { def: WebMCPToolDefinition; controller: AbortController }>();
   private supported = false;
+  private listeners: ToolExecutionListener[] = [];
 
   constructor() {
     this.supported = typeof (document as any).modelContext !== 'undefined';
@@ -16,6 +27,20 @@ export class ToolRegistry {
 
   public isSupported(): boolean {
     return this.supported;
+  }
+
+  public onExecution(listener: ToolExecutionListener) {
+    this.listeners.push(listener);
+  }
+
+  private notify(event: 'start' | 'end', data: { toolName: string; input: any; result?: any; error?: any }) {
+    for (const l of this.listeners) {
+      try {
+        l(event, data);
+      } catch (err) {
+        console.error('[ToolRegistry] Listener error:', err);
+      }
+    }
   }
 
   public async register(toolDef: WebMCPToolDefinition): Promise<boolean> {
@@ -38,7 +63,25 @@ export class ToolRegistry {
           description: toolDef.description,
           inputSchema: toolDef.inputSchema,
           execute: async (input: any, ctx: { signal?: AbortSignal }) => {
-            return toolDef.execute(input, { signal: ctx?.signal || controller.signal });
+            let parsedInput = input;
+            if (typeof input === 'string') {
+              try {
+                parsedInput = JSON.parse(input || '{}');
+              } catch {
+                parsedInput = input;
+              }
+            }
+            parsedInput = parsedInput ?? {};
+
+            this.notify('start', { toolName: toolDef.name, input: parsedInput });
+            try {
+              const res = await toolDef.execute(parsedInput, { signal: ctx?.signal || controller.signal });
+              this.notify('end', { toolName: toolDef.name, input: parsedInput, result: res });
+              return res;
+            } catch (err) {
+              this.notify('end', { toolName: toolDef.name, input: parsedInput, error: err });
+              throw err;
+            }
           },
         },
         { signal: controller.signal }
