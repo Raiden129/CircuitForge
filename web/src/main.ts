@@ -18,6 +18,7 @@ import {
   circuitClearWorkspaceTool,
   circuitVerifyTruthTableTool,
   circuitPackageChipTool,
+  circuitSetViewportTool,
 } from './webmcp/tools';
 import { unityBridge } from './bridge/unity-bridge';
 import { ActivityTimeline } from './ui/activity-timeline';
@@ -94,6 +95,7 @@ async function init() {
     await toolRegistry.register(circuitRedoTool);
     await toolRegistry.register(circuitVerifyTruthTableTool);
     await toolRegistry.register(circuitPackageChipTool);
+    await toolRegistry.register(circuitSetViewportTool);
 
     timeline.log({
       actor: 'human',

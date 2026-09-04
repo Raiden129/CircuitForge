@@ -184,6 +184,10 @@ namespace DLS.Bridge
 						HandlePackageChip(requestId, req);
 						break;
 
+					case "set_viewport":
+						HandleSetViewport(requestId, req);
+						break;
+
 					default:
 						SendError(requestId, "UNKNOWN_COMMAND", $"Command not recognized: {req.command}");
 						break;
@@ -283,6 +287,8 @@ namespace DLS.Bridge
 			string projName = Project.ActiveProject.description.ProjectName;
 			if (string.IsNullOrEmpty(projName)) projName = "Sandbox";
 
+			var (center, min, max, zoom, aspect) = CameraController.GetVisibleBounds();
+
 			var data = new Dictionary<string, object>
 			{
 				{ "project_name", projName },
@@ -293,7 +299,15 @@ namespace DLS.Bridge
 				{ "subchips", subchipsList },
 				{ "input_pins", inputPinsList },
 				{ "output_pins", outputPinsList },
-				{ "wires", wiresList }
+				{ "wires", wiresList },
+				{ "viewport", new Dictionary<string, object>
+					{
+						{ "center", new { x = center.x, y = center.y } },
+						{ "visible_bounds", new { min_x = min.x, max_x = max.x, min_y = min.y, max_y = max.y } },
+						{ "zoom", zoom },
+						{ "aspect_ratio", aspect }
+					}
+				}
 			};
 
 			SendResponse(requestId, true, $"Snapshot of '{chipName}': {subchipsList.Count} components, {wiresList.Count} wires, {inputPinsList.Count} inputs, {outputPinsList.Count} outputs", data, new[] { "circuit_add_component", "circuit_connect", "circuit_set_input" });
@@ -547,6 +561,27 @@ namespace DLS.Bridge
 			}
 
 			var res = commandService.PackageChip(name, color, clearWorkspace);
+			DispatchCommandResult(requestId, res);
+		}
+
+		private void HandleSetViewport(string requestId, BridgeRequestModel req)
+		{
+			string action = null;
+			float? x = null;
+			float? y = null;
+			float? zoom = null;
+			float? zoomDelta = null;
+
+			if (req.payload != null)
+			{
+				if (req.payload.ContainsKey("action")) action = req.payload["action"]?.ToString();
+				if (req.payload.ContainsKey("x") && req.payload["x"] != null) x = Convert.ToSingle(req.payload["x"]);
+				if (req.payload.ContainsKey("y") && req.payload["y"] != null) y = Convert.ToSingle(req.payload["y"]);
+				if (req.payload.ContainsKey("zoom") && req.payload["zoom"] != null) zoom = Convert.ToSingle(req.payload["zoom"]);
+				if (req.payload.ContainsKey("zoom_delta") && req.payload["zoom_delta"] != null) zoomDelta = Convert.ToSingle(req.payload["zoom_delta"]);
+			}
+
+			var res = commandService.SetViewport(action, x, y, zoom, zoomDelta);
 			DispatchCommandResult(requestId, res);
 		}
 

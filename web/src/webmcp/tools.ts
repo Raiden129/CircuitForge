@@ -385,3 +385,39 @@ export const circuitPackageChipTool: WebMCPToolDefinition = {
     return unityBridge.send('package_chip', input, signal);
   },
 };
+
+export const circuitSetViewportTool: WebMCPToolDefinition = {
+  name: 'circuit_set_viewport',
+  description: 'Adjust camera zoom and position or auto-fit all circuit components within the visible canvas.',
+  readOnlyHint: true,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['fit_circuit', 'set', 'zoom', 'pan'],
+        description: 'Camera action: "fit_circuit" (auto-frame all elements), "set" (set center/zoom), "zoom" (adjust zoom), "pan" (shift position).',
+        default: 'fit_circuit',
+      },
+      x: {
+        type: 'number',
+        description: 'Target camera center X coordinate in circuit world units.',
+      },
+      y: {
+        type: 'number',
+        description: 'Target camera center Y coordinate in circuit world units.',
+      },
+      zoom: {
+        type: 'number',
+        description: 'Orthographic zoom level (e.g. 5.0 is default, 10.0 is zoomed out twice as far).',
+      },
+      zoom_delta: {
+        type: 'number',
+        description: 'Relative zoom delta to add (+ for zoom out, - for zoom in).',
+      },
+    },
+  },
+  execute: async (input: { action?: string; x?: number; y?: number; zoom?: number; zoom_delta?: number } = {}, { signal }) => {
+    return unityBridge.send('set_viewport', input, signal);
+  },
+};

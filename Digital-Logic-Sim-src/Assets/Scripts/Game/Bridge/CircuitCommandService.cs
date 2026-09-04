@@ -475,6 +475,49 @@ namespace DLS.Bridge
 			return CommandResult.Success(Revision, summary, resultData);
 		}
 
+		public CommandResult SetViewport(string action, float? x, float? y, float? zoom, float? zoomDelta)
+		{
+			action = action?.ToLowerInvariant()?.Trim() ?? "set";
+
+			if (action == "fit_circuit" || action == "fit")
+			{
+				if (Project.ActiveProject != null && Project.ActiveProject.ViewedChip != null)
+				{
+					CameraController.FitToChip(Project.ActiveProject.ViewedChip);
+				}
+			}
+			else
+			{
+				var (center, _, _, curZoom, _) = CameraController.GetVisibleBounds();
+				float targetX = x ?? center.x;
+				float targetY = y ?? center.y;
+				float targetZoom = zoom ?? curZoom;
+
+				if (zoomDelta.HasValue)
+				{
+					targetZoom += zoomDelta.Value;
+				}
+
+				CameraController.SetPositionAndZoom(new Vector2(targetX, targetY), targetZoom);
+			}
+
+			var (newCenter, min, max, newZoom, aspect) = CameraController.GetVisibleBounds();
+
+			var viewportData = new Dictionary<string, object>
+			{
+				{ "center", new { x = newCenter.x, y = newCenter.y } },
+				{ "visible_bounds", new { min_x = min.x, max_x = max.x, min_y = min.y, max_y = max.y } },
+				{ "zoom", newZoom },
+				{ "aspect_ratio", aspect }
+			};
+
+			return CommandResult.Success(
+				Revision,
+				$"Viewport updated: center ({newCenter.x:F1}, {newCenter.y:F1}), zoom {newZoom:F1}, visible range [{min.x:F1}..{max.x:F1}, {min.y:F1}..{max.y:F1}]",
+				viewportData
+			);
+		}
+
 		public CommandResult PackageChip(string chipName, string colorHex = null, bool clearWorkspace = true)
 		{
 			if (Project.ActiveProject == null || Project.ActiveProject.ViewedChip == null)

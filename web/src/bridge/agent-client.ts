@@ -63,7 +63,7 @@ export class AgentRelayClient {
         if (targetTool) {
           const res = await (document as any).modelContext.executeTool(
             targetTool,
-            JSON.stringify(params || {})
+            typeof params === 'object' && params !== null ? params : {}
           );
           result = typeof res === 'string' ? JSON.parse(res) : res;
         } else {

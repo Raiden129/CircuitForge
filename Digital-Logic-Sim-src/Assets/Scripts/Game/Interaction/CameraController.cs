@@ -176,9 +176,53 @@ namespace DLS.Game
 
 		static void UpdateCameraState()
 		{
+			if (camera == null)
+			{
+				camera = Object.FindAnyObjectByType<Camera>();
+				if (camera != null) camT = camera.transform;
+			}
+			if (camera == null || camT == null || activeView == null) return;
+
 			Vector2 pos2D = activeView.Pos;
 			camT.position = new Vector3(pos2D.x, pos2D.y, -10);
 			camera.orthographicSize = activeView.OrthoSize;
+		}
+
+		public static void SetPositionAndZoom(Vector2 pos, float zoom)
+		{
+			if (activeView == null) activeView = new ViewState();
+			activeView.Pos = pos;
+			activeView.OrthoSize = Mathf.Clamp(zoom, zoomRange.x, zoomRange.y);
+			UpdateCameraState();
+		}
+
+		public static void FitToChip(DevChipInstance chip)
+		{
+			if (chip == null) return;
+			ViewState view = GetViewForChip(chip);
+			activeView = view;
+			if (chipViewStateLookup != null && !string.IsNullOrEmpty(chip.ChipName))
+			{
+				chipViewStateLookup[chip.ChipName] = activeView;
+			}
+			UpdateCameraState();
+		}
+
+		public static (Vector2 center, Vector2 min, Vector2 max, float zoom, float aspect) GetVisibleBounds()
+		{
+			if (camera == null)
+			{
+				camera = Object.FindAnyObjectByType<Camera>();
+				if (camera != null) camT = camera.transform;
+			}
+			float orthoSize = activeView != null ? activeView.OrthoSize : StartupOrthoSize;
+			Vector2 center = activeView != null ? activeView.Pos : Vector2.zero;
+			float aspect = camera != null && camera.aspect > 0.01f ? camera.aspect : 16f / 9f;
+			float halfHeight = orthoSize;
+			float halfWidth = orthoSize * aspect;
+			Vector2 min = new Vector2(center.x - halfWidth, center.y - halfHeight);
+			Vector2 max = new Vector2(center.x + halfWidth, center.y + halfHeight);
+			return (center, min, max, orthoSize, aspect);
 		}
 
 		static ViewState GetActiveViewState()
