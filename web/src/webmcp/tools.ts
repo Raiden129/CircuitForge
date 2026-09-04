@@ -369,6 +369,14 @@ export const circuitPackageChipTool: WebMCPToolDefinition = {
         type: 'string',
         description: 'Optional hex color for the chip body (e.g. "#38bdf8").',
       },
+      width: {
+        type: 'number',
+        description: 'Optional custom width in grid units. Will automatically expand if name or pin count requires more space.',
+      },
+      height: {
+        type: 'number',
+        description: 'Optional custom height in grid units. Will automatically expand if pin count requires more space.',
+      },
       clear_workspace: {
         type: 'boolean',
         description: 'Whether to clear the canvas after saving (default: true).',
@@ -381,7 +389,7 @@ export const circuitPackageChipTool: WebMCPToolDefinition = {
     },
     required: ['name'],
   },
-  execute: async (input: { name: string; color?: string; clear_workspace?: boolean; expected_revision?: number }, { signal }) => {
+  execute: async (input: { name: string; color?: string; width?: number; height?: number; clear_workspace?: boolean; expected_revision?: number }, { signal }) => {
     return unityBridge.send('package_chip', input, signal);
   },
 };

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DLS.Description;
 using DLS.Game;
+using DLS.Graphics;
 using DLS.SaveSystem;
 using DLS.Simulation;
 using Newtonsoft.Json.Linq;
@@ -518,7 +519,7 @@ namespace DLS.Bridge
 			);
 		}
 
-		public CommandResult PackageChip(string chipName, string colorHex = null, bool clearWorkspace = true)
+		public CommandResult PackageChip(string chipName, string colorHex = null, float? width = null, float? height = null, bool clearWorkspace = true)
 		{
 			if (Project.ActiveProject == null || Project.ActiveProject.ViewedChip == null)
 			{
@@ -613,6 +614,15 @@ namespace DLS.Bridge
 			ChipDescription desc = DescriptionCreator.CreateChipDescription(devChip);
 			desc.Name = chipName;
 
+			// Ensure chip body is sized adequately so the label does not overflow
+			Vector2 minSize = SubChipInstance.CalculateMinChipSize(desc.InputPins, desc.OutputPins, chipName);
+			minSize.x += DrawSettings.GridSize * 0.75f;
+			minSize.y = Mathf.Max(minSize.y, DrawSettings.GridSize * 3f);
+
+			float finalWidth = width.HasValue ? Mathf.Max(width.Value, minSize.x) : minSize.x;
+			float finalHeight = height.HasValue ? Mathf.Max(height.Value, minSize.y) : minSize.y;
+			desc.Size = new Vector2(finalWidth, finalHeight);
+
 			if (!string.IsNullOrEmpty(colorHex) && ColorUtility.TryParseHtmlString(colorHex, out Color parsedCol))
 			{
 				desc.Colour = parsedCol;
@@ -634,6 +644,7 @@ namespace DLS.Bridge
 			var data = new Dictionary<string, object>
 			{
 				{ "chip_name", chipName },
+				{ "size", new { width = desc.Size.x, height = desc.Size.y } },
 				{ "input_pins", savedInPins },
 				{ "output_pins", savedOutPins },
 				{ "workspace_cleared", clearWorkspace },
@@ -859,6 +870,7 @@ namespace DLS.Bridge
 					{ "label", sub.Label },
 					{ "type", "subchip" },
 					{ "position", new { x = sub.Position.x, y = sub.Position.y } },
+					{ "size", new { width = sub.Size.x, height = sub.Size.y } },
 					{ "input_pins", inPins },
 					{ "output_pins", outPins }
 				});

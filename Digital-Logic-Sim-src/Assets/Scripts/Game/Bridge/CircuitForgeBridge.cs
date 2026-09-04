@@ -551,16 +551,20 @@ namespace DLS.Bridge
 		{
 			string name = null;
 			string color = null;
+			float? width = null;
+			float? height = null;
 			bool clearWorkspace = true;
 
 			if (req.payload != null)
 			{
 				if (req.payload.ContainsKey("name")) name = req.payload["name"]?.ToString();
 				if (req.payload.ContainsKey("color")) color = req.payload["color"]?.ToString();
+				if (req.payload.ContainsKey("width") && req.payload["width"] != null) width = Convert.ToSingle(req.payload["width"]);
+				if (req.payload.ContainsKey("height") && req.payload["height"] != null) height = Convert.ToSingle(req.payload["height"]);
 				if (req.payload.ContainsKey("clear_workspace")) clearWorkspace = Convert.ToBoolean(req.payload["clear_workspace"]);
 			}
 
-			var res = commandService.PackageChip(name, color, clearWorkspace);
+			var res = commandService.PackageChip(name, color, width, height, clearWorkspace);
 			DispatchCommandResult(requestId, res);
 		}
 
