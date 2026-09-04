@@ -1,4 +1,12 @@
-# ⚡ CircuitForge — Agent-Native Digital Logic Studio
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/logo-name.svg">
+    <source media="(prefers-color-scheme: light)" srcset="web/public/Logo-Name.svg">
+    <img alt="CircuitForge" src="web/public/logo-name.svg" width="450">
+  </picture>
+</p>
+
+# CircuitForge — Agent-Native Digital Logic Studio
 
 > **Build circuits by hand. Let agents build, test, and teach alongside you.**  
 > Built for **The WebMCP Challenge**.
@@ -47,11 +55,36 @@ Structured WebMCP Result returned to Agent & logged to Activity Timeline
 
 ---
 
-## WebMCP Tools
-
-- **`circuit_get_snapshot`**: Returns the complete active circuit graph (components, pins, wires, current signal values, and revision).
+## WebMCP Tools (19 Tools Across 5 Bundles)
+ 
+### Core & Snapshot
+- **`circuit_get_snapshot`**: Returns the complete active circuit graph (components, pins, wires, current signal values, viewport coordinates, and revision).
 - **`circuit_get_capabilities`**: Reports active WebMCP tool bundles, editability, and simulation mode.
-- *(Additional bundles: Edit, Simulation, and Learning)*
+
+### Circuit Editing & Construction
+- **`circuit_add_component`**: Places logic gates (AND, OR, NOT, XOR, NAND, NOR, XNOR), I/O (INPUT, OUTPUT), and custom packaged chips.
+- **`circuit_delete_component`**: Removes a component and safely severs connected wires.
+- **`circuit_move_component`**: Repositions a component to new schematic coordinates.
+- **`circuit_connect`**: Wires an output pin to an input pin with topological validation.
+- **`circuit_disconnect`**: Removes a specific wire between two pins.
+- **`circuit_clear`**: Clears the canvas for a new schematic.
+- **`circuit_undo`**: Reverts the last circuit edit or wiring action.
+- **`circuit_redo`**: Re-applies a previously undone action.
+
+### Simulation Control
+- **`circuit_set_input`**: Toggles or sets binary input states (0 or 1) on named input pins.
+- **`circuit_pulse_clock`**: Advances the simulation clock by a specified number of cycles.
+- **`circuit_reset_simulation`**: Resets all signal propagation states to baseline.
+
+### Inspection & Diagnostics
+- **`circuit_inspect_component`**: Retrieves deep topological details and pin metadata for a specific component.
+- **`circuit_trace_signal`**: Traces the active electrical path upstream to sources or downstream to sinks.
+- **`circuit_find_floating_inputs`**: Diagnoses high-impedance, disconnected input pins that cause erratic logic behavior.
+- **`circuit_verify_truth_table`**: Exhaustively verifies circuit behavior against an expected boolean truth table across all 2^N input combinations.
+
+### Packaging & Viewport Control
+- **`circuit_package_chip`**: Synthesizes the active subcircuit into a reusable custom chip with auto-sized footprint, custom color, and pin mapping.
+- **`circuit_set_viewport`**: Controls canvas zoom, pan coordinates, or auto-fits the camera to enclose all circuit components.
 
 ---
 
