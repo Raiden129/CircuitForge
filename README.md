@@ -6,56 +6,53 @@
   </picture>
 </p>
 
-# CircuitForge — Agent-Native Digital Logic Studio
+# CircuitForge
 
-> **Build circuits by hand. Let agents build, test, and teach alongside you.**  
-> Built for **The WebMCP Challenge**.
+Build circuits by hand, or let AI agents build, test, and debug alongside you in real time.  
+Built for **The WebMCP Challenge**.
 
 ---
 
 ## What is CircuitForge?
 
-CircuitForge is an interactive, browser-based digital logic studio where human engineers and autonomous AI agents share the exact same editable, simulated circuit in real time.
+CircuitForge is a browser-based digital logic simulator where human engineers and AI agents share the exact same editable canvas. 
 
-Built on an authoritative, fixed-step WebGL simulation engine, CircuitForge transforms visual circuit design from an opaque, pixel-rendered canvas into a first-class, typed semantic environment. Agents and humans operate as co-designers on a single shared document canvas.
+It uses a fixed-step WebGL simulation engine. Instead of treating the canvas as pixels, CircuitForge exposes the circuit as a typed semantic environment. This means agents and humans can work on the exact same document at the same time.
 
-### Solving Complex Digital Circuit and Logic Problems
-CircuitForge is not merely a static schematic viewer or basic gate sandbox. It provides autonomous AI agents with the tools required to solve high-order digital logic problems, synthesize hierarchical computer architectures, and conduct automated formal verification:
+### What can it do?
+CircuitForge isn't just a schematic viewer or a basic gate sandbox. It gives AI agents the tools they need to solve real digital logic problems and build hierarchical architectures.
 
-- **Complex Combinational Logic Design**: Agents can design, wire, and optimize multi-bit arithmetic and routing logic, including full adders, ripple-carry adders, subtractors, 4-to-1 multiplexers (MUX), 1-to-4 demultiplexers (DEMUX), priority encoders, and multi-function Arithmetic Logic Units (ALUs).
-- **Sequential Circuits & Memory Architectures**: Agents can assemble and stabilize clocked sequential systems, including D flip-flops, JK flip-flops, T flip-flops, edge-triggered shift registers, synchronous binary counters, finite state machines (FSMs), and addressable memory cells.
-- **Hierarchical Modular Synthesis**: Using the `circuit_package_chip` engine, agents synthesize raw gate networks into self-contained, named custom Integrated Circuits (ICs) with custom pinouts, colors, and auto-calculated package dimensions. Once packaged, custom chips immediately become reusable components in the agent's component catalog, enabling agents to build complex architectures layer-by-layer (for example, packaging a 1-bit full adder to assemble an 8-bit ripple-carry adder, and packaging that to assemble a CPU datapath).
-- **Automated Defect Localization & Repair**: When a circuit behaves unexpectedly, agents run deep topological diagnostics: tracing active electrical signals upstream to driving sources or downstream to sinks, identifying floating high-impedance inputs, detecting disconnected pins, and surgically severing or rewiring faulty signal paths.
-- **Formal Truth Table Verification**: Rather than relying on guesswork, agents exhaustively test circuits across all $2^N$ input combinations against formal boolean truth tables, receiving structured vector-by-vector pass/fail feedback directly from the simulation engine.
-
----
-
-## Why WebMCP Makes This Possible
-
-Modern web applications increasingly render complex graphical interfaces inside WebGL, WebGPU, or HTML5 `<canvas>` elements. While this enables high-performance 60 FPS graphics, it introduces an insurmountable barrier for conventional AI assistants.
-
-### The Failure Modes of Prior Approaches
-1. **The Vision + Coordinate Guessing Trap**: Prior AI assistants interact with graphical canvases through computer vision: taking screenshots, asking multimodal models to predict pixel coordinates, and synthesizing simulated mouse clicks. In digital logic design, this approach fails catastrophically:
-   - Logic pins are mere pixels wide; a single pixel offset misroutes a connection or shorts a bus.
-   - Wires overlap in multi-color layers, making visual wire tracing ambiguous.
-   - Clocked sequential circuits alternate states at high frequencies that static screenshots cannot capture.
-2. **The Opaque Canvas Problem**: In WebGL and WebAssembly, logic gates and wires are rendered directly into the frame buffer using GPU shaders. There are no DOM elements, no semantic HTML nodes, and no accessible accessibility tree for logic gates. Standard browser automation tools (Puppeteer, Playwright) see only an empty `<canvas id="unity-canvas">`.
-
-### The WebMCP Solution: A Typed Semantic Control Plane
-WebMCP (`document.modelContext`) fundamentally changes this paradigm by exposing a native, bidirectional, schema-enforced control plane directly inside the browser session:
-
-1. **Shared Single-Document Canvas**: The agent executes inside the same browser tab, session, and DOM context as the human. When an agent places a gate or routes a wire, it appears instantly on the human's screen.
-2. **Authoritative Simulation Single-Source-of-Truth**: The agent interacts directly with the authoritative C# simulation graph running in WebAssembly memory. There is no intermediate translation layer or pixel approximation.
-3. **Deterministic Mutation & Revision Tracking**: Every agent action (`circuit_add_component`, `circuit_connect`, `circuit_set_input`, `circuit_package_chip`) executes transactionally against the circuit graph and returns an incremented circuit revision counter (`rev: N`). This guarantees causal ordering and lets agents detect concurrent human edits.
-4. **Exhaustive Simulation Verification**: Instead of asking an agent to "look at the LED and guess if it turned on", the agent calls `circuit_verify_truth_table`. The simulation engine programmatically locks input vectors, runs simulation propagation ticks, reads output pins, and returns structured diagnostics identifying exact failing rows.
-5. **Spatial Telemetry & Viewport Synchronization**: `circuit_get_snapshot` provides real-time viewport telemetry, including camera center, visible coordinate bounding boxes, and zoom level. Using `circuit_set_viewport`, the agent can pan, zoom, or trigger `fit_circuit` to frame the active schematic, ensuring human and agent maintain mutual visual alignment.
-6. **Total Human Transparency & Co-Creativity**: Every agent tool call is intercepted by `ToolRegistry` and rendered in the live UI Activity Timeline with execution metadata, parameters, and results. The human retains full manual override, canvas interaction, and undo/redo control at all times.
+* **Complex Combinational Logic**: Agents can design and wire multi-bit arithmetic logic, like full adders, multiplexers, priority encoders, and ALUs.
+* **Sequential Circuits & Memory**: It supports clocked systems like D/JK/T flip-flops, shift registers, synchronous counters, FSMs, and addressable memory.
+* **Hierarchical Synthesis**: Using the `circuit_package_chip` tool, agents can group raw gate networks into custom ICs with specific pinouts and colors. Once packaged, these become reusable components. For example, an agent can package a 1-bit adder, use it to build an 8-bit adder, and package that to build a CPU datapath.
+* **Automated Debugging**: When a circuit breaks, agents can run topological diagnostics. They can trace signals upstream to sources or downstream to sinks, find floating inputs, and rewire faulty paths.
+* **Formal Verification**: Instead of guessing if an LED turned on, agents can use `circuit_verify_truth_table` to exhaustively test all $2^N$ input combinations against a boolean truth table and get exact pass/fail feedback from the engine.
 
 ---
 
-## Architecture & Technical Implementation
+## Why WebMCP?
 
-CircuitForge bridges web-native agent interfaces with a high-performance C# digital logic simulation core compiled to WebAssembly:
+Most modern web apps render complex UIs inside WebGL, WebGPU, or HTML5 `<canvas>`. This looks great, but it completely breaks standard AI assistants.
+
+### The problem with standard canvas automation
+1. **Vision and coordinate guessing**: Traditional AI assistants look at screenshots and guess where to click. This doesn't work for digital logic. Pins are a pixel wide, wires overlap, and sequential circuits change states too fast for static screenshots to catch.
+2. **The opaque canvas**: WebGL renders directly to the frame buffer. There are no DOM elements or accessibility trees for logic gates. Tools like Puppeteer or Playwright just see an empty `<canvas>` tag.
+
+### How WebMCP fixes this
+WebMCP (`document.modelContext`) exposes a native, bidirectional control plane directly in the browser session.
+
+1. **Shared Canvas**: The agent runs in the same browser tab and DOM context as you. When an agent places a gate, it shows up on your screen instantly.
+2. **Direct Simulation Access**: The agent talks directly to the C# simulation graph running in WebAssembly. No pixel approximation or intermediate translation layers.
+3. **Deterministic Mutations**: Every action (`circuit_add_component`, `circuit_connect`, etc.) runs transactionally against the circuit graph and returns an incremented revision counter (`rev: N`). This keeps things ordered and lets agents detect if you made an edit at the same time.
+4. **Programmatic Verification**: The agent calls `circuit_verify_truth_table`. The engine locks the inputs, runs the simulation ticks, reads the outputs, and returns structured diagnostics showing exactly which rows failed.
+5. **Spatial Awareness**: `circuit_get_snapshot` gives the agent camera telemetry (center, bounding box, zoom). The agent can use `circuit_set_viewport` to pan, zoom, or frame the active schematic so you both stay on the same page.
+6. **Human Transparency**: Every agent tool call is logged in the live UI Activity Timeline. You keep full manual control, canvas interaction, and undo/redo history at all times.
+
+---
+
+## Architecture
+
+CircuitForge bridges web-native agent interfaces with a high-performance C# simulation core compiled to WebAssembly.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -71,7 +68,7 @@ CircuitForge bridges web-native agent interfaces with a high-performance C# digi
 │                          TYPESCRIPT HOST SHELL (Vite)                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ • ToolRegistry: Centralized lifecycle dispatcher & schema validator (Zod)   │
-│ • Activity Timeline: Real-time UI execution stream for all agent actions   │
+│ • Activity Timeline: Real-time UI execution stream for all agent actions    │
 │ • Viewport Bridge: Coordinate transforms (Screen ↔ NDC ↔ Unity World)       │
 │ • State Synchronizer: Tracks revision counter, component map, and pin states│
 └───────────────────────────────────┬─────────────────────────────────────────┘
@@ -93,79 +90,71 @@ CircuitForge bridges web-native agent interfaces with a high-performance C# digi
 │ • Fixed-Step Simulation Driver: Signal propagation & clock oscillator       │
 │ • Automated IC Synthesizer: circuit_package_chip with CalculateMinChipSize  │
 │ • Exhaustive Truth-Table Engine: Evaluates all 2^N vectors across subchips  │
-│ • Orthographic Viewport Controller: Dynamic camera framing & zoom bounds   │
+│ • Orthographic Viewport Controller: Dynamic camera framing & zoom bounds    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Technical Subsystems
+### Key Subsystems
 
-1. **Centralized Agent Tool Registry & Activity Timeline**:
-   Every tool call—whether originating from native in-browser WebMCP or an external CLI relay—passes through a centralized execution interceptor in `ToolRegistry.executeTool`. This validates parameters with Zod, dispatches the request to the simulation engine, and streams an execution record to the visible UI Activity Timeline, giving users real-time visibility into the agent's thought process.
-
-2. **Hierarchical IC Packaging Engine (`circuit_package_chip`)**:
-   Agents can package arbitrary subcircuits into custom chips on the fly. The bridge automatically identifies input switches and output indicators, converts LEDs to output pins (`OUT-1`, `OUT-2`), generates a custom chip definition (`SavedChip`), computes required package geometry using `SubChipInstance.CalculateMinChipSize` so long chip labels never clip or overflow, registers the chip in the catalog, and updates the UI toolbar.
-
-3. **Exhaustive Truth Table Verification Engine (`circuit_verify_truth_table`)**:
-   Enables formal verification directly in the simulation engine. The bridge takes an array of input pin names, output pin names, and expected binary vectors. It freezes clock cycles, iteratively forces each binary input state, allows the simulation network to settle, reads output pins, and returns an itemized row-by-row verification report highlighting any unexpected outputs.
-
-4. **Spatial Coordination & Viewport Framing (`circuit_set_viewport`)**:
-   Provides agents with spatial awareness. Every snapshot includes the camera's current coordinate center, visible world-space bounding box, zoom level, and aspect ratio. Agents can navigate the canvas using `pan`, adjust `zoom`, or call `fit_circuit` to calculate the collective bounding box of all placed components and smoothly center the camera around them.
+* **Tool Registry & Activity Timeline**: All tool calls (from native WebMCP or external CLI) go through `ToolRegistry.executeTool`. It validates parameters with Zod, sends the request to the engine, and streams the execution record to the UI Activity Timeline so you can see what the agent is doing.
+* **Hierarchical IC Packaging (`circuit_package_chip`)**: Agents can package subcircuits into custom chips on the fly. The bridge finds input switches and output LEDs, converts them to pins, calculates the package geometry (`SubChipInstance.CalculateMinChipSize`), and adds the new chip to the UI toolbar.
+* **Truth Table Verification (`circuit_verify_truth_table`)**: The engine takes arrays of input/output pins and expected binary vectors. It freezes the clock, forces each input state, waits for the network to settle, reads the outputs, and returns a row-by-row verification report.
+* **Viewport Control (`circuit_set_viewport`)**: Gives agents spatial awareness. Snapshots include the camera center, world-space bounding box, and zoom level. Agents can pan, zoom, or call `fit_circuit` to automatically frame all placed components.
 
 ---
 
-## WebMCP Tools (19 Tools Across 5 Bundles)
+## WebMCP Tools
 
-CircuitForge exposes 19 discrete WebMCP tools organized into 5 functional bundles:
+CircuitForge exposes 19 tools across 5 functional bundles:
 
 ### 1. Core & Snapshot
-- **`circuit_get_snapshot`**: Returns the complete active circuit graph, including all placed components, pin states, wire connections, viewport bounds, and current revision ID.
-- **`circuit_get_capabilities`**: Queries active tool bundles, canvas dimensions, simulation modes, and supported component types.
+* `circuit_get_snapshot`: Returns the full circuit graph, pin states, wire connections, viewport bounds, and current revision ID.
+* `circuit_get_capabilities`: Queries active tool bundles, canvas dimensions, simulation modes, and supported components.
 
 ### 2. Circuit Editing & Construction
-- **`circuit_add_component`**: Places logic gates (`AND`, `OR`, `NOT`, `XOR`, `NAND`, `NOR`, `XNOR`), I/O elements (`INPUT`, `OUTPUT`), or custom packaged chips at specified world coordinates.
-- **`circuit_delete_component`**: Deletes a component by ID and automatically severs all attached wires.
-- **`circuit_move_component`**: Repositions an existing component to new coordinates on the schematic canvas.
-- **`circuit_connect`**: Connects an output pin to an input pin with topological validation preventing invalid connections.
-- **`circuit_disconnect`**: Removes a specific wire connection between two pins.
-- **`circuit_clear`**: Clears the active canvas and resets component counters.
-- **`circuit_undo`**: Reverts the most recent circuit edit or wiring transaction.
-- **`circuit_redo`**: Re-applies the most recently undone transaction.
+* `circuit_add_component`: Places logic gates, I/O elements, or custom chips at specific world coordinates.
+* `circuit_delete_component`: Deletes a component by ID and cuts attached wires.
+* `circuit_move_component`: Moves an existing component to new coordinates.
+* `circuit_connect`: Connects an output pin to an input pin (with topological validation).
+* `circuit_disconnect`: Removes a wire connection between two pins.
+* `circuit_clear`: Clears the canvas and resets counters.
+* `circuit_undo`: Reverts the last edit or wiring transaction.
+* `circuit_redo`: Re-applies the last undone transaction.
 
 ### 3. Simulation Control
-- **`circuit_set_input`**: Drives a binary state (`0` or `1`) onto a specified input pin.
-- **`circuit_pulse_clock`**: Manually pulses the simulation clock by a designated cycle count.
-- **`circuit_reset_simulation`**: Resets all signal propagation states across the active schematic to zero.
+* `circuit_set_input`: Drives a `0` or `1` onto a specific input pin.
+* `circuit_pulse_clock`: Manually pulses the simulation clock by a set number of cycles.
+* `circuit_reset_simulation`: Resets all signal propagation states to zero.
 
 ### 4. Inspection & Diagnostics
-- **`circuit_inspect_component`**: Inspects a single component's internal metadata, pin list, coordinates, and signal values.
-- **`circuit_trace_signal`**: Performs a bidirectional graph traversal tracing electrical signals upstream to driving sources or downstream to sinks.
-- **`circuit_find_floating_inputs`**: Scans the schematic for unconnected, high-impedance input pins that cause logic instability.
-- **`circuit_verify_truth_table`**: Programmatically sweeps through all $2^N$ input combinations, evaluating outputs against an expected boolean specification.
+* `circuit_inspect_component`: Returns a component's metadata, pin list, coordinates, and current signal values.
+* `circuit_trace_signal`: Traces electrical signals upstream to sources or downstream to sinks.
+* `circuit_find_floating_inputs`: Scans for unconnected, high-impedance input pins.
+* `circuit_verify_truth_table`: Sweeps through all $2^N$ input combinations and evaluates outputs against an expected boolean spec.
 
 ### 5. Packaging & Viewport Control
-- **`circuit_package_chip`**: Synthesizes the active subcircuit into a reusable custom chip with auto-sized footprint, custom color, and pin mapping.
-- **`circuit_set_viewport`**: Controls camera pan, zoom factor, or automatically frames all components using `fit_circuit`.
+* `circuit_package_chip`: Synthesizes the active subcircuit into a reusable custom chip.
+* `circuit_set_viewport`: Controls camera pan, zoom, or frames all components using `fit_circuit`.
 
 ---
 
-## Dual Agent Support: In-Browser & Remote CLI
+## Dual Agent Support
 
-CircuitForge supports both native browser agents and external CLI agents simultaneously:
+CircuitForge supports both native browser agents and external CLI agents at the same time.
 
 ### Mode 1: Native In-Browser WebMCP
-For browsers with native WebMCP support (such as Chrome 149+ with WebMCP flags enabled or the ChatGPT in-app browser). Tools are registered directly into `document.modelContext` on page load. No external proxies or configurations are required.
+For browsers with native WebMCP support (like Chrome 149+ with flags enabled, or the ChatGPT in-app browser). Tools are registered directly into `document.modelContext` on page load. No external proxies needed.
 
 ### Mode 2: Remote Agent via MCP Relay
-For external AI tools, IDE assistants, or CLI agents (such as Claude Code, OpenAI Codex CLI, or custom Python/Node automation scripts).
-CircuitForge includes a lightweight local WebSocket relay (`web/relay-server.cjs` on port 5174). External agents connect via standard MCP JSON-RPC protocol over WebSocket or SSE to inspect, build, and verify circuits in the live browser tab.
+For external tools, IDE assistants, or CLI agents (like Claude Code, OpenAI Codex CLI, or custom scripts). CircuitForge includes a lightweight local WebSocket relay (`web/relay-server.cjs` on port 5174). External agents connect via standard MCP JSON-RPC over WebSocket to interact with the live browser tab.
 
 ---
 
-## Quick Start (Local Development)
+## Quick Start
 
 ### Prerequisites
-- **Node.js**: v18+ (tested on Node v24)
-- **Browser**: Chrome 149+ with WebMCP enabled or ChatGPT browser environment.
+* **Node.js**: v18+ (tested on Node v24)
+* **Browser**: Chrome 149+ with WebMCP enabled, or a ChatGPT browser environment.
   ```bash
   google-chrome --enable-blink-features=WebMCP,WebMCPTesting --enable-features=WebMCP,WebMCPTesting
   ```
